@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Col de Cénise 24h — Suivi</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders:wght@600;700;800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  --bg:#F5F3EC; --surface:#FFFFFF; --surface-2:#EDEAE0; --ink:#1C2321; --ink-dim:#5B6660;
+  --accent:#E1531F; --accent-ink:#FFFFFF; --line:#DDD8C9; --good:#2F8F5B; --good-bg:#E3F1E9;
+  --danger:#C23B22; --danger-bg:#F7E4DF; --shadow:0 1px 2px rgba(28,35,33,.08),0 6px 16px rgba(28,35,33,.07);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#11171A; --surface:#1A2224; --surface-2:#202B2D; --ink:#EDEDE6; --ink-dim:#93A19B;
+    --accent:#FF7A45; --accent-ink:#1C2321; --line:#2A3538; --good:#4CBE82; --good-bg:#173226;
+    --danger:#FF6B57; --danger-bg:#3A1E19; --shadow:0 1px 2px rgba(0,0,0,.35),0 8px 20px rgba(0,0,0,.4);
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#11171A; --surface:#1A2224; --surface-2:#202B2D; --ink:#EDEDE6; --ink-dim:#93A19B;
+  --accent:#FF7A45; --accent-ink:#1C2321; --line:#2A3538; --good:#4CBE82; --good-bg:#173226;
+  --danger:#FF6B57; --danger-bg:#3A1E19; --shadow:0 1px 2px rgba(0,0,0,.35),0 8px 20px rgba(0,0,0,.4);
+}
+*{box-sizing:border-box;}
+html,body{margin:0;}
+body{background:var(--bg);color:var(--ink);font-family:'IBM Plex Sans',system-ui,sans-serif;}
+.mono{font-family:'IBM Plex Mono',ui-monospace,monospace;font-variant-numeric:tabular-nums;}
+#app{max-width:480px;margin:0 auto;padding:20px 16px calc(24px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;gap:16px;}
+.eyebrow{display:flex;align-items:center;gap:8px;font-size:12px;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-dim);}
+.live-dot{width:8px;height:8px;border-radius:50%;background:var(--good);}
+.live-dot.stale{background:var(--danger);}
+h1{margin:2px 0 0;font-family:'Big Shoulders',sans-serif;font-weight:800;font-size:26px;line-height:1;}
+.hero-card{background:var(--surface);border:1px solid var(--line);border-radius:20px;padding:20px;box-shadow:var(--shadow);}
+.hero-main{display:flex;align-items:baseline;gap:8px;font-family:'Big Shoulders',sans-serif;}
+.hero-number{font-size:64px;font-weight:800;line-height:1;color:var(--accent);}
+.hero-unit{font-size:20px;font-weight:600;color:var(--ink-dim);}
+.hero-sub{margin-top:6px;font-size:15px;color:var(--ink-dim);}
+.hero-sub .dot{margin:0 6px;}
+.hero-progress-track{margin-top:14px;height:8px;border-radius:99px;background:var(--surface-2);overflow:hidden;}
+.hero-progress-fill{height:100%;background:var(--accent);border-radius:99px;transition:width .4s ease;}
+.clock-row{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}
+.clock-tile{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 8px;display:flex;flex-direction:column;gap:4px;align-items:center;text-align:center;}
+.clock-tile .label{font-size:11px;color:var(--ink-dim);text-transform:uppercase;letter-spacing:.05em;}
+.clock-tile .value{font-size:16px;font-weight:500;}
+.pace-card{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:16px;display:flex;flex-direction:column;gap:6px;align-items:flex-start;}
+.pace-pill{font-family:'Big Shoulders',sans-serif;font-weight:700;font-size:20px;padding:4px 14px;border-radius:999px;background:var(--surface-2);color:var(--ink-dim);}
+.pace-pill.is-good{background:var(--good-bg);color:var(--good);}
+.pace-pill.is-behind{background:var(--danger-bg);color:var(--danger);}
+.pace-note{font-size:13px;color:var(--ink-dim);margin:0;}
+.stat-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;}
+.stat-tile{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:4px;}
+.stat-tile .label{font-size:11px;color:var(--ink-dim);text-transform:uppercase;letter-spacing:.05em;}
+.stat-tile .value{font-size:18px;font-weight:500;}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:16px;}
+.card h3{margin:0 0 8px;font-family:'Big Shoulders',sans-serif;font-size:16px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-dim);}
+.lap-row{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--line);font-size:14px;}
+.lap-row:last-child{border-bottom:0;}
+.src-badge{font-size:10px;text-transform:uppercase;letter-spacing:.03em;padding:2px 6px;border-radius:6px;background:var(--surface-2);color:var(--ink-dim);}
+.empty-note{color:var(--ink-dim);font-size:14px;text-align:center;padding:10px 0;margin:0;}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="eyebrow"><span class="live-dot" id="live-dot"></span><span id="freshness">Connexion...</span></div>
+    <h1>Col de Cénise · 24h en boucle</h1>
+  </header>
+
+  <section class="hero-card">
+    <div class="hero-main">
+      <span class="hero-number" id="hero-laps">0</span>
+      <span class="hero-unit">/ <span id="hero-laps-target">29</span> tours</span>
+    </div>
+    <div class="hero-sub"><span id="hero-km">0.0</span> / <span id="hero-km-target">100</span> km<span class="dot">·</span><span id="hero-dplus">0</span> m D+</div>
+    <div class="hero-progress-track"><div class="hero-progress-fill" id="hero-progress" style="width:0%"></div></div>
+  </section>
+
+  <section class="clock-row">
+    <div class="clock-tile"><span class="label">Écoulé</span><span class="value mono" id="clock-elapsed">00:00:00</span></div>
+    <div class="clock-tile"><span class="label">Restant</span><span class="value mono" id="clock-remaining">24:00:00</span></div>
+    <div class="clock-tile"><span class="label">Fin prévue</span><span class="value mono" id="clock-end">--:--</span></div>
+  </section>
+
+  <section class="pace-card">
+    <div class="pace-pill" id="pace-pill">--</div>
+    <p class="pace-note" id="pace-note">La course n'a pas encore commencé.</p>
+  </section>
+
+  <section class="stat-grid">
+    <div class="stat-tile"><span class="label">Dernier tour</span><span class="value mono" id="stat-last">--</span></div>
+    <div class="stat-tile"><span class="label">Tour moyen</span><span class="value mono" id="stat-avg">--</span></div>
+    <div class="stat-tile"><span class="label">Meilleur tour</span><span class="value mono" id="stat-best">--</span></div>
+    <div class="stat-tile"><span class="label">Rythme cible</span><span class="value mono" id="stat-target-pace">--</span></div>
+  </section>
+
+  <section class="card">
+    <h3>Derniers tours</h3>
+    <div id="lap-list"></div>
+    <p class="empty-note" id="lap-empty">Aucun tour pour l'instant.</p>
+  </section>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script>
+(function(){
+  var FIREBASE_CONFIG = {
+    apiKey: "AIzaSyAgayUPOrqdbUndNDegdTzgin8I9QNk8iQ",
+    authDomain: "mes-randonnees-314e9.firebaseapp.com",
+    projectId: "mes-randonnees-314e9",
+    storageBucket: "mes-randonnees-314e9.firebasestorage.app",
+    messagingSenderId: "513478282263",
+    appId: "1:513478282263:web:1f079b87e55a99192fe052"
+  };
+  firebase.initializeApp(FIREBASE_CONFIG);
+  var db = firebase.firestore();
+  var raceRef = db.collection('race').doc('cenise2026');
+
+  function fmtClock(ms){
+    ms=Math.max(0,ms);
+    var s=Math.floor(ms/1000), hh=Math.floor(s/3600), mm=Math.floor((s%3600)/60), ss=s%60;
+    function pad(n){ return String(n).padStart(2,'0'); }
+    return pad(hh)+':'+pad(mm)+':'+pad(ss);
+  }
+  function fmtDur(ms){
+    var neg=ms<0; ms=Math.abs(ms);
+    var totalMin=Math.floor(ms/60000), h=Math.floor(totalMin/60), m=totalMin%60, s=Math.floor((ms%60000)/1000);
+    var out = h>0 ? (h+'h '+String(m).padStart(2,'0')+'min') : (m+'min '+String(s).padStart(2,'0')+'s');
+    return (neg?'-':'')+out;
+  }
+  function fmtTime(ts){ return new Date(ts).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}); }
+
+  var state = null;
+  var lastUpdatedAtMs = null;
+
+  function paceInfo(s, now){
+    if(!s.startedAt) return null;
+    var elapsed=now-s.startedAt, n=s.laps.length;
+    var targetPaceMs = s.cfg.raceDurationH*3600000/s.cfg.targetLaps;
+    var deltaMs = n*targetPaceMs - elapsed;
+    var projLaps=null, projKm=null;
+    if(n>0){ var avgPace=elapsed/n; projLaps=(s.cfg.raceDurationH*3600000)/avgPace; projKm=projLaps*s.cfg.loopKm; }
+    return {elapsed:elapsed, deltaMs:deltaMs, projLaps:projLaps, projKm:projKm};
+  }
+
+  function render(){
+    if(!state){
+      document.getElementById('freshness').textContent = 'En attente du premier envoi...';
+      return;
+    }
+    var s = state;
+    document.getElementById('hero-laps').textContent = s.laps.length;
+    document.getElementById('hero-laps-target').textContent = s.cfg.targetLaps;
+    var km = s.laps.length*s.cfg.loopKm;
+    document.getElementById('hero-km').textContent = km.toFixed(1);
+    document.getElementById('hero-km-target').textContent = s.cfg.targetKm;
+    document.getElementById('hero-dplus').textContent = Math.round(s.laps.length*s.cfg.loopGainM);
+    document.getElementById('hero-progress').style.width = Math.min(100,(s.laps.length/s.cfg.targetLaps)*100)+'%';
+    document.getElementById('stat-target-pace').textContent = fmtDur(s.cfg.raceDurationH*3600000/s.cfg.targetLaps);
+
+    var durations=[];
+    for(var i=0;i<s.laps.length;i++){
+      var prevT = i>0 ? s.laps[i-1].t : s.startedAt;
+      durations.push(s.laps[i].t-prevT);
+    }
+    if(s.laps.length){
+      document.getElementById('stat-last').textContent=fmtDur(durations[durations.length-1]);
+      document.getElementById('stat-avg').textContent=fmtDur(durations.reduce(function(a,b){return a+b;},0)/durations.length);
+      document.getElementById('stat-best').textContent=fmtDur(Math.min.apply(null,durations));
+    } else {
+      document.getElementById('stat-last').textContent='--';
+      document.getElementById('stat-avg').textContent='--';
+      document.getElementById('stat-best').textContent='--';
+    }
+
+    var list=document.getElementById('lap-list');
+    list.innerHTML='';
+    document.getElementById('lap-empty').hidden = s.laps.length>0;
+    s.laps.slice(-8).reverse().forEach(function(l){
+      var row=document.createElement('div');
+      row.className='lap-row';
+      row.innerHTML='<span>Tour '+l.n+'</span><span class="mono">'+fmtTime(l.t)+'</span>';
+      list.appendChild(row);
+    });
+
+    tickLive();
+  }
+
+  function tickLive(){
+    var now=Date.now();
+    if(!state){ return; }
+    var s=state;
+    if(s.startedAt){
+      var elapsed=now-s.startedAt;
+      var remaining=s.cfg.raceDurationH*3600000-elapsed;
+      document.getElementById('clock-elapsed').textContent=fmtClock(elapsed);
+      document.getElementById('clock-remaining').textContent= remaining>0?fmtClock(remaining):'00:00:00';
+      document.getElementById('clock-end').textContent=fmtTime(s.startedAt+s.cfg.raceDurationH*3600000);
+      var pi=paceInfo(s, now);
+      var pill=document.getElementById('pace-pill');
+      pill.className='pace-pill '+(pi.deltaMs>=0?'is-good':'is-behind');
+      pill.textContent=(pi.deltaMs>=0?'+':'-')+fmtDur(Math.abs(pi.deltaMs))+' '+(pi.deltaMs>=0?"d'avance":'de retard');
+      document.getElementById('pace-note').textContent = s.laps.length>0
+        ? ('À ce rythme : '+pi.projLaps.toFixed(1)+' tours ('+pi.projKm.toFixed(1)+' km) en '+s.cfg.raceDurationH+'h.')
+        : "En attente du premier tour pour estimer le rythme.";
+    } else {
+      document.getElementById('clock-elapsed').textContent='00:00:00';
+      document.getElementById('clock-remaining').textContent=fmtClock(s.cfg.raceDurationH*3600000);
+      document.getElementById('clock-end').textContent='--:--';
+      document.getElementById('pace-pill').className='pace-pill';
+      document.getElementById('pace-pill').textContent='--';
+      document.getElementById('pace-note').textContent="La course n'a pas encore commencé.";
+    }
+
+    if(lastUpdatedAtMs){
+      var age = now - lastUpdatedAtMs;
+      var fresh = age < 90000;
+      document.getElementById('live-dot').className = 'live-dot'+(fresh?'':' stale');
+      document.getElementById('freshness').textContent = fresh ? 'En direct' : ('Reçu il y a '+fmtDur(age));
+    }
+  }
+  setInterval(tickLive, 1000);
+
+  raceRef.onSnapshot(function(doc){
+    if(!doc.exists){ return; }
+    var data = doc.data();
+    lastUpdatedAtMs = data.updatedAt && data.updatedAt.toMillis ? data.updatedAt.toMillis() : Date.now();
+    delete data.updatedAt;
+    state = data;
+    render();
+  }, function(err){
+    document.getElementById('freshness').textContent = 'Connexion impossible';
+  });
+})();
+</script>
+</body>
+</html>
