@@ -194,10 +194,10 @@ h1{margin:2px 0 0;font-family:'Big Shoulders',sans-serif;font-weight:800;font-si
     var list=document.getElementById('lap-list');
     list.innerHTML='';
     document.getElementById('lap-empty').hidden = s.laps.length>0;
-    s.laps.slice(-8).reverse().forEach(function(l){
+    s.laps.map(function(l,idx){ return {l:l, num:idx+1}; }).slice(-8).reverse().forEach(function(item){
       var row=document.createElement('div');
       row.className='lap-row';
-      row.innerHTML='<span>Tour '+l.n+'</span><span class="mono">'+fmtTime(l.t)+'</span>';
+      row.innerHTML='<span>Tour '+item.num+'</span><span class="mono">'+fmtTime(item.l.t)+'</span>';
       list.appendChild(row);
     });
 
