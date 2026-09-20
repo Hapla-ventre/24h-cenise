@@ -116,7 +116,7 @@ h1{margin:2px 0 0;font-family:'Big Shoulders',sans-serif;font-weight:800;font-si
   };
   firebase.initializeApp(FIREBASE_CONFIG);
   var db = firebase.firestore();
-  var raceRef = db.collection('race').doc('cenise2026');
+  var sessionsRef = db.collection('race_sessions');
 
   function fmtClock(ms){
     ms=Math.max(0,ms);
@@ -147,7 +147,23 @@ h1{margin:2px 0 0;font-family:'Big Shoulders',sans-serif;font-weight:800;font-si
 
   function render(){
     if(!state){
-      document.getElementById('freshness').textContent = 'En attente du premier envoi...';
+      document.getElementById('live-dot').className = 'live-dot stale';
+      document.getElementById('freshness').textContent = 'Pas de sortie en cours actuellement.';
+      document.getElementById('hero-laps').textContent = '0';
+      document.getElementById('hero-km').textContent = '0.0';
+      document.getElementById('hero-dplus').textContent = '0';
+      document.getElementById('hero-progress').style.width = '0%';
+      document.getElementById('clock-elapsed').textContent = '00:00:00';
+      document.getElementById('clock-remaining').textContent = '--:--:--';
+      document.getElementById('clock-end').textContent = '--:--';
+      document.getElementById('pace-pill').className = 'pace-pill';
+      document.getElementById('pace-pill').textContent = '--';
+      document.getElementById('pace-note').textContent = "Personne ne marche/court en ce moment.";
+      document.getElementById('stat-last').textContent = '--';
+      document.getElementById('stat-avg').textContent = '--';
+      document.getElementById('stat-best').textContent = '--';
+      document.getElementById('lap-list').innerHTML = '';
+      document.getElementById('lap-empty').hidden = false;
       return;
     }
     var s = state;
@@ -223,11 +239,20 @@ h1{margin:2px 0 0;font-family:'Big Shoulders',sans-serif;font-weight:800;font-si
   }
   setInterval(tickLive, 1000);
 
-  raceRef.onSnapshot(function(doc){
-    if(!doc.exists){ return; }
-    var data = doc.data();
+  sessionsRef.where('active','==',true).limit(1).onSnapshot(function(snap){
+    if(snap.empty){
+      state = null;
+      lastUpdatedAtMs = null;
+      render();
+      return;
+    }
+    var data = snap.docs[0].data();
     lastUpdatedAtMs = data.updatedAt && data.updatedAt.toMillis ? data.updatedAt.toMillis() : Date.now();
+    document.getElementById('freshness').dataset.sessionName = data.name || '';
     delete data.updatedAt;
+    delete data.name;
+    delete data.active;
+    delete data.createdAt;
     state = data;
     render();
   }, function(err){

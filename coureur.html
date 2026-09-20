@@ -29,9 +29,20 @@ body{background:var(--bg);color:var(--ink);font-family:'IBM Plex Sans',system-ui
 .mono{font-family:'IBM Plex Mono',ui-monospace,monospace;font-variant-numeric:tabular-nums;}
 #app{max-width:520px;margin:0 auto;padding:0 16px 24px;display:flex;flex-direction:column;gap:16px;}
 .topbar{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);padding-top:16px;padding-bottom:8px;border-bottom:1px solid var(--line);}
-.eyebrow{display:block;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-dim);}
+.eyebrow{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-dim);}
 .topbar h1{margin:2px 0 10px;font-family:'Big Shoulders',sans-serif;font-weight:800;font-size:28px;line-height:1;}
 .main{display:flex;flex-direction:column;gap:16px;}
+.replay-block{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:16px;display:flex;flex-direction:column;gap:10px;}
+.replay-block h3{margin:0;font-family:'Big Shoulders',sans-serif;font-size:19px;font-weight:700;}
+.fine-print{margin:0;font-size:12.5px;color:var(--ink-dim);line-height:1.4;}
+.replay-controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
+.replay-controls button{font-family:'IBM Plex Sans',sans-serif;font-weight:600;font-size:14px;padding:8px 14px;border-radius:10px;border:1px solid var(--line);background:var(--surface-2);color:var(--ink);}
+.replay-controls select{font-family:'IBM Plex Sans',sans-serif;font-size:13px;padding:8px 10px;border-radius:10px;border:1px solid var(--line);background:var(--surface);color:var(--ink);}
+.replay-controls button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);}
+.session-row{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 0;border-bottom:1px solid var(--line);font-size:13.5px;}
+.session-row:last-child{border-bottom:0;}
+.session-row .mini-btn{font-size:12px;padding:5px 10px;border-radius:8px;border:1px solid var(--line);background:var(--surface-2);color:var(--ink);}
+.session-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--good);margin-right:6px;}
 .clock-row{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}
 .clock-tile{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 8px;display:flex;flex-direction:column;gap:4px;align-items:center;text-align:center;}
 .clock-tile .label{font-size:11px;color:var(--ink-dim);text-transform:uppercase;letter-spacing:.05em;}
@@ -62,16 +73,10 @@ body{background:var(--bg);color:var(--ink);font-family:'IBM Plex Sans',system-ui
 .lap-table td{padding:8px;border-bottom:1px solid var(--line);}
 .src-badge{font-size:10px;text-transform:uppercase;letter-spacing:.03em;padding:2px 6px;border-radius:6px;background:var(--surface-2);color:var(--ink-dim);}
 .empty-note{color:var(--ink-dim);font-size:14px;text-align:center;padding:20px 0;}
-.replay-block{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:16px;display:flex;flex-direction:column;gap:10px;}
-.replay-block h3{margin:0;font-family:'Big Shoulders',sans-serif;font-size:19px;font-weight:700;}
-.fine-print{margin:0;font-size:12.5px;color:var(--ink-dim);line-height:1.4;}
 #replay-svg-approx,#replay-svg-real{width:100%;max-width:320px;aspect-ratio:1/1;margin:0 auto;background:var(--surface-2);border-radius:14px;}
 .track-path{fill:none;stroke:var(--ink-dim);stroke-width:3;stroke-linecap:round;stroke-linejoin:round;opacity:.55;}
 .track-start{fill:var(--ink);}
 .track-marker{fill:var(--accent);stroke:var(--surface);stroke-width:2;}
-.replay-controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
-.replay-controls button{font-family:'IBM Plex Sans',sans-serif;font-weight:600;font-size:14px;padding:8px 14px;border-radius:10px;border:1px solid var(--line);background:var(--surface-2);color:var(--ink);}
-.replay-controls select{font-family:'IBM Plex Sans',sans-serif;font-size:13px;padding:8px 10px;border-radius:10px;border:1px solid var(--line);background:var(--surface);color:var(--ink);}
 .replay-status{margin:0;font-size:13px;color:var(--ink-dim);}
 .file-input{display:inline-block;font-weight:600;font-size:14px;padding:9px 14px;border-radius:10px;border:1px dashed var(--line);color:var(--accent);cursor:pointer;text-align:center;}
 #setup-fallback{width:100%;min-height:130px;font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:11px;line-height:1.4;border-radius:10px;border:1px solid var(--line);background:var(--surface-2);color:var(--ink);padding:10px;resize:vertical;}
@@ -89,6 +94,7 @@ body{background:var(--bg);color:var(--ink);font-family:'IBM Plex Sans',system-ui
 :root[data-theme="dark"] .toast,:root:not([data-theme="light"]) .toast{color:var(--ink);background:var(--surface-2);border:1px solid var(--line);}
 .toast-action{background:var(--accent);color:var(--accent-ink);border:0;border-radius:8px;padding:6px 10px;font-weight:600;font-size:12.5px;flex-shrink:0;}
 a.suivi-link{color:var(--accent);font-weight:600;}
+[hidden]{display:none!important;}
 </style>
 </head>
 <body>
@@ -99,32 +105,95 @@ a.suivi-link{color:var(--accent);font-weight:600;}
   </header>
 
   <main class="main">
-    <section class="clock-row">
-      <div class="clock-tile"><span class="label">Écoulé</span><span class="value mono" id="clock-elapsed">00:00:00</span></div>
-      <div class="clock-tile"><span class="label">Restant</span><span class="value mono" id="clock-remaining">24:00:00</span></div>
-      <div class="clock-tile"><span class="label">Fin prévue</span><span class="value mono" id="clock-end">--:--</span></div>
-    </section>
-
-    <section class="hero-card">
-      <div class="hero-main">
-        <span class="hero-number" id="hero-laps">0</span>
-        <span class="hero-unit">/ <span id="hero-laps-target">29</span> tours</span>
+    <section class="replay-block" id="session-manager">
+      <h3>Sorties</h3>
+      <p class="fine-print" id="no-session-notice">Aucune sortie active. Crée une nouvelle sortie pour commencer à enregistrer et diffuser en direct sur le lien de suivi.</p>
+      <div class="replay-controls">
+        <button type="button" class="primary" id="btn-new-session">+ Nouvelle sortie</button>
+        <button type="button" id="btn-end-session" hidden>Terminer cette sortie</button>
       </div>
-      <div class="hero-sub"><span id="hero-km">0.0</span> / <span id="hero-km-target">100</span> km<span class="dot">·</span><span id="hero-dplus">0</span> m D+</div>
-      <div class="hero-progress-track"><div class="hero-progress-fill" id="hero-progress" style="width:0%"></div></div>
+      <div id="session-current" class="fine-print" hidden></div>
+      <div id="session-list"></div>
     </section>
 
-    <section class="pace-card">
-      <div class="pace-pill" id="pace-pill">--</div>
-      <p class="pace-note" id="pace-note">La course n'a pas encore commencé.</p>
-    </section>
+    <div id="race-ui" hidden style="display:flex;flex-direction:column;gap:16px;">
+      <section class="clock-row">
+        <div class="clock-tile"><span class="label">Écoulé</span><span class="value mono" id="clock-elapsed">00:00:00</span></div>
+        <div class="clock-tile"><span class="label">Restant</span><span class="value mono" id="clock-remaining">24:00:00</span></div>
+        <div class="clock-tile"><span class="label">Fin prévue</span><span class="value mono" id="clock-end">--:--</span></div>
+      </section>
 
-    <section class="stat-grid">
-      <div class="stat-tile"><span class="label">Dernier tour</span><span class="value mono" id="stat-last">--</span></div>
-      <div class="stat-tile"><span class="label">Tour moyen</span><span class="value mono" id="stat-avg">--</span></div>
-      <div class="stat-tile"><span class="label">Meilleur tour</span><span class="value mono" id="stat-best">--</span></div>
-      <div class="stat-tile"><span class="label">Rythme cible</span><span class="value mono" id="stat-target-pace">--</span></div>
-    </section>
+      <section class="hero-card">
+        <div class="hero-main">
+          <span class="hero-number" id="hero-laps">0</span>
+          <span class="hero-unit">/ <span id="hero-laps-target">29</span> tours</span>
+        </div>
+        <div class="hero-sub"><span id="hero-km">0.0</span> / <span id="hero-km-target">100</span> km<span class="dot">·</span><span id="hero-dplus">0</span> m D+</div>
+        <div class="hero-progress-track"><div class="hero-progress-fill" id="hero-progress" style="width:0%"></div></div>
+      </section>
+
+      <section class="pace-card">
+        <div class="pace-pill" id="pace-pill">--</div>
+        <p class="pace-note" id="pace-note">La course n'a pas encore commencé.</p>
+      </section>
+
+      <section class="stat-grid">
+        <div class="stat-tile"><span class="label">Dernier tour</span><span class="value mono" id="stat-last">--</span></div>
+        <div class="stat-tile"><span class="label">Tour moyen</span><span class="value mono" id="stat-avg">--</span></div>
+        <div class="stat-tile"><span class="label">Meilleur tour</span><span class="value mono" id="stat-best">--</span></div>
+        <div class="stat-tile"><span class="label">Rythme cible</span><span class="value mono" id="stat-target-pace">--</span></div>
+      </section>
+
+      <nav class="tabs" id="tabs">
+        <button class="tab active" data-tab="historique" type="button">Historique</button>
+        <button class="tab" data-tab="replay" type="button">Replay</button>
+      </nav>
+
+      <section class="tab-panel" id="panel-historique">
+        <table class="lap-table">
+          <thead><tr><th>#</th><th>Heure</th><th>Tour</th><th>Cumul</th><th></th></tr></thead>
+          <tbody id="lap-rows"></tbody>
+        </table>
+        <p class="empty-note" id="lap-empty">Aucun tour enregistré pour l'instant.</p>
+      </section>
+
+      <section class="tab-panel" id="panel-replay" hidden>
+        <div class="replay-block">
+          <h3>Replay approximatif</h3>
+          <p class="fine-print">Basé sur l'heure de passage de chaque tour, à rythme supposé constant pendant le tour : une pause en cours de tour ne sera pas visible ici.</p>
+          <svg id="replay-svg-approx" viewBox="0 0 320 320"></svg>
+          <div class="replay-controls">
+            <button type="button" id="replay-play-approx">▶ Lecture</button>
+            <select id="replay-speed-approx">
+              <option value="20000">course entière en 20s</option>
+              <option value="45000" selected>course entière en 45s</option>
+              <option value="90000">course entière en 90s</option>
+            </select>
+          </div>
+          <p class="replay-status mono" id="replay-status-approx">--</p>
+        </div>
+
+        <div class="replay-block">
+          <h3>Replay réel (import GPS)</h3>
+          <p class="fine-print">Si tu enregistres la course avec une appli GPS en tâche de fond (ex. OpenTracks), importe ici le .gpx exporté après coup pour un replay fidèle, pauses comprises.</p>
+          <label class="file-input" for="gpx-import">Importer un fichier .gpx</label>
+          <input type="file" id="gpx-import" accept=".gpx" hidden>
+          <div id="replay-real-wrap" hidden>
+            <svg id="replay-svg-real" viewBox="0 0 320 320"></svg>
+            <div class="replay-controls">
+              <button type="button" id="replay-play-real">▶ Lecture</button>
+              <select id="replay-speed-real">
+                <option value="20000">en 20s</option>
+                <option value="45000" selected>en 45s</option>
+                <option value="90000">en 90s</option>
+                <option value="180000">en 3 min</option>
+              </select>
+            </div>
+            <p class="replay-status mono" id="replay-status-real">--</p>
+          </div>
+        </div>
+      </section>
+    </div>
 
     <section class="replay-block" id="setup-card">
       <h3>Réveil GPS en fond (Termux)</h3>
@@ -135,59 +204,9 @@ a.suivi-link{color:var(--accent);font-weight:600;}
       <textarea id="setup-fallback" readonly hidden></textarea>
       <p class="fine-print" id="setup-copy-status"></p>
     </section>
-
-    <nav class="tabs" id="tabs">
-      <button class="tab active" data-tab="historique" type="button">Historique</button>
-      <button class="tab" data-tab="replay" type="button">Replay</button>
-    </nav>
-
-    <section class="tab-panel" id="panel-historique">
-      <table class="lap-table">
-        <thead><tr><th>#</th><th>Heure</th><th>Tour</th><th>Cumul</th><th></th></tr></thead>
-        <tbody id="lap-rows"></tbody>
-      </table>
-      <p class="empty-note" id="lap-empty">Aucun tour enregistré pour l'instant.</p>
-    </section>
-
-    <section class="tab-panel" id="panel-replay" hidden>
-      <div class="replay-block">
-        <h3>Replay approximatif</h3>
-        <p class="fine-print">Basé sur l'heure de passage de chaque tour, à rythme supposé constant pendant le tour : une pause en cours de tour ne sera pas visible ici.</p>
-        <svg id="replay-svg-approx" viewBox="0 0 320 320"></svg>
-        <div class="replay-controls">
-          <button type="button" id="replay-play-approx">▶ Lecture</button>
-          <select id="replay-speed-approx">
-            <option value="20000">course entière en 20s</option>
-            <option value="45000" selected>course entière en 45s</option>
-            <option value="90000">course entière en 90s</option>
-          </select>
-        </div>
-        <p class="replay-status mono" id="replay-status-approx">--</p>
-      </div>
-
-      <div class="replay-block">
-        <h3>Replay réel (import GPS)</h3>
-        <p class="fine-print">Si tu enregistres la course avec une appli GPS en tâche de fond (ex. OpenTracks), importe ici le .gpx exporté après coup pour un replay fidèle, pauses comprises.</p>
-        <label class="file-input" for="gpx-import">Importer un fichier .gpx</label>
-        <input type="file" id="gpx-import" accept=".gpx" hidden>
-        <div id="replay-real-wrap" hidden>
-          <svg id="replay-svg-real" viewBox="0 0 320 320"></svg>
-          <div class="replay-controls">
-            <button type="button" id="replay-play-real">▶ Lecture</button>
-            <select id="replay-speed-real">
-              <option value="20000">en 20s</option>
-              <option value="45000" selected>en 45s</option>
-              <option value="90000">en 90s</option>
-              <option value="180000">en 3 min</option>
-            </select>
-          </div>
-          <p class="replay-status mono" id="replay-status-real">--</p>
-        </div>
-      </div>
-    </section>
   </main>
 
-  <footer class="action-bar" id="action-bar">
+  <footer class="action-bar" id="action-bar" hidden>
     <div class="sync-row">
       <span class="sync-dot is-pending" id="sync-dot"></span>
       <span id="sync-text">Connexion...</span>
@@ -218,7 +237,8 @@ a.suivi-link{color:var(--accent);font-weight:600;}
   firebase.initializeApp(FIREBASE_CONFIG);
   var db = firebase.firestore();
   try{ db.enablePersistence({synchronizeTabs:true}).catch(function(){}); }catch(e){}
-  var raceRef = db.collection('race').doc('cenise2026');
+  var sessionsRef = db.collection('race_sessions');
+  var DEFAULT_CFG = {targetLaps:29,targetKm:100,loopKm:3.454,loopGainM:127,raceDurationH:24};
 
   var TRACK = [[46.019485,6.449133],[46.019457,6.449063],[46.018744,6.448989],[46.01671,6.44905],[46.016173,6.449107],[46.01531,6.449329],[46.01438,6.449471],[46.014323,6.44946],[46.013802,6.448824],[46.013092,6.448316],[46.012453,6.447947],[46.011994,6.447806],[46.011856,6.447808],[46.010469,6.448008],[46.010184,6.448327],[46.009618,6.448753],[46.009026,6.449381],[46.008923,6.449406],[46.008856,6.448886],[46.008924,6.447992],[46.008914,6.447954],[46.008799,6.448001],[46.008683,6.448176],[46.008899,6.447585],[46.009074,6.446899],[46.009269,6.446526],[46.009402,6.445981],[46.009856,6.445073],[46.009934,6.444279],[46.009879,6.443558],[46.010043,6.440977],[46.010522,6.439406],[46.010683,6.439131],[46.01085,6.439051],[46.011152,6.439218],[46.011453,6.439496],[46.012142,6.43997],[46.014079,6.441614],[46.014294,6.441697],[46.014362,6.441685],[46.014404,6.441613],[46.014862,6.442043],[46.014986,6.442258],[46.015226,6.443358],[46.015561,6.443663],[46.016291,6.444487],[46.016582,6.445148],[46.018201,6.447591],[46.018996,6.448543],[46.019354,6.448888],[46.019484,6.44913]];
 
@@ -283,14 +303,16 @@ a.suivi-link{color:var(--accent);font-weight:600;}
   }
   function fmtTime(ts){ return new Date(ts).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}); }
 
-  var DEFAULT_STATE = {cfg:{targetLaps:29,targetKm:100,loopKm:3.454,loopGainM:127,raceDurationH:24},startedAt:null,laps:[]};
-  var state = DEFAULT_STATE;
-  try{
-    var cached = JSON.parse(localStorage.getItem('ck-race-cache')||'null');
-    if(cached && cached.cfg && cached.laps) state = cached;
-  }catch(e){}
+  var currentSessionId = null;
+  try{ currentSessionId = localStorage.getItem('ck-current-session-id') || null; }catch(e){}
+  var state = null;
 
-  function saveLocalCache(){ try{ localStorage.setItem('ck-race-cache', JSON.stringify(state)); }catch(e){} }
+  function saveLocalCache(){
+    try{
+      localStorage.setItem('ck-current-session-id', currentSessionId || '');
+      localStorage.setItem('ck-race-cache', state ? JSON.stringify(state) : '');
+    }catch(e){}
+  }
 
   function setSync(status, text){
     var dot=document.getElementById('sync-dot'), t=document.getElementById('sync-text');
@@ -299,15 +321,16 @@ a.suivi-link{color:var(--accent);font-weight:600;}
   }
 
   function pushState(){
+    if(!currentSessionId || !state) return;
     var payload = JSON.parse(JSON.stringify(state));
     payload.updatedAt = firebase.firestore.FieldValue.serverTimestamp();
-    raceRef.set(payload).then(function(){
+    sessionsRef.doc(currentSessionId).set(payload, {merge:true}).then(function(){
       setSync('ok', 'Synchronisé '+new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit',second:'2-digit'}));
     }).catch(function(){
       setSync('pending', 'Hors ligne — en attente de réseau');
     });
   }
-  setInterval(function(){ if(state.startedAt) pushState(); }, 60000);
+  setInterval(function(){ if(currentSessionId && state && state.startedAt) pushState(); }, 60000);
 
   var toastTimer=null;
   function toast(msg, opts){
@@ -327,14 +350,111 @@ a.suivi-link{color:var(--accent);font-weight:600;}
   }
   function hideToast(){ document.getElementById('toast').hidden=true; clearTimeout(toastTimer); }
 
+  // ---- session manager ----
+  function showSessionUI(has){
+    document.getElementById('race-ui').hidden = !has;
+    document.getElementById('action-bar').hidden = !has;
+    document.getElementById('no-session-notice').hidden = has;
+    document.getElementById('btn-end-session').hidden = !has;
+    document.getElementById('session-current').hidden = !has;
+  }
+
+  function loadSessionsList(){
+    sessionsRef.orderBy('createdAt','desc').limit(15).get().then(function(snap){
+      var box=document.getElementById('session-list');
+      box.innerHTML='';
+      snap.forEach(function(doc){
+        var d=doc.data();
+        var row=document.createElement('div');
+        row.className='session-row';
+        var dateTxt = d.createdAt && d.createdAt.toDate ? d.createdAt.toDate().toLocaleString('fr-FR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}) : '';
+        var laps = (d.laps||[]).length;
+        var label = (d.active ? '<span class="session-dot"></span>' : '') + (d.name||dateTxt) + ' — ' + laps + ' tours';
+        var span=document.createElement('span');
+        span.innerHTML = label;
+        row.appendChild(span);
+        if(doc.id!==currentSessionId){
+          var btn=document.createElement('button');
+          btn.type='button'; btn.textContent='Reprendre'; btn.className='mini-btn';
+          btn.addEventListener('click', function(){ resumeSession(doc.id); });
+          row.appendChild(btn);
+        }
+        box.appendChild(row);
+      });
+    }).catch(function(){});
+  }
+
+  function deactivateAllThenSet(newRef, newData){
+    return sessionsRef.where('active','==',true).get().then(function(snap){
+      var batch=db.batch();
+      snap.forEach(function(d){ if(d.id!==newRef.id) batch.update(d.ref, {active:false}); });
+      batch.set(newRef, newData);
+      return batch.commit();
+    });
+  }
+
+  function applyLoadedSession(id, d){
+    currentSessionId = id;
+    state = {cfg: d.cfg || DEFAULT_CFG, startedAt: d.startedAt || null, laps: d.laps || []};
+    saveLocalCache();
+    showSessionUI(true);
+    document.getElementById('session-current').textContent = 'Sortie active : ' + (d.name || id);
+    document.getElementById('session-current').hidden = false;
+    render(state);
+    loadSessionsList();
+  }
+
+  function createNewSession(){
+    var ref = sessionsRef.doc();
+    var name = 'Sortie du ' + new Date().toLocaleString('fr-FR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
+    var data = {
+      name: name,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      active: true,
+      cfg: DEFAULT_CFG,
+      startedAt: null,
+      laps: [],
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    };
+    deactivateAllThenSet(ref, data).then(function(){
+      applyLoadedSession(ref.id, data);
+    }).catch(function(){ toast('Impossible de créer la sortie (réseau ?)'); });
+  }
+
+  function resumeSession(id){
+    sessionsRef.doc(id).get().then(function(doc){
+      if(!doc.exists) return;
+      var d = doc.data();
+      var updated = Object.assign({}, d, {active:true, updatedAt: firebase.firestore.FieldValue.serverTimestamp()});
+      deactivateAllThenSet(doc.ref, updated).then(function(){
+        applyLoadedSession(id, d);
+      });
+    }).catch(function(){ toast('Impossible de reprendre cette sortie (réseau ?)'); });
+  }
+
+  function endCurrentSession(){
+    if(!currentSessionId) return;
+    sessionsRef.doc(currentSessionId).update({active:false, updatedAt: firebase.firestore.FieldValue.serverTimestamp()}).then(function(){
+      currentSessionId = null;
+      state = null;
+      saveLocalCache();
+      showSessionUI(false);
+      loadSessionsList();
+    }).catch(function(){ toast('Impossible de terminer la sortie (réseau ?)'); });
+  }
+
+  document.getElementById('btn-new-session').addEventListener('click', createNewSession);
+  document.getElementById('btn-end-session').addEventListener('click', endCurrentSession);
+
+  // ---- race logic ----
   function afterLocalChange(){ saveLocalCache(); render(state); pushState(); }
   function addLap(source){
-    if(!state.startedAt) return;
+    if(!state || !state.startedAt) return;
     state.laps.push({n:state.laps.length+1, t:Date.now(), source:source});
     afterLocalChange();
   }
   function undoLap(){
-    if(!state.laps.length) return;
+    if(!state || !state.laps.length) return;
     state.laps.pop();
     state.laps.forEach(function(l,i){ l.n=i+1; });
     afterLocalChange();
@@ -347,10 +467,11 @@ a.suivi-link{color:var(--accent);font-weight:600;}
     var deltaMs = n*targetPaceMs - elapsed;
     var projLaps=null, projKm=null;
     if(n>0){ var avgPace=elapsed/n; projLaps=(s.cfg.raceDurationH*3600000)/avgPace; projKm=projLaps*s.cfg.loopKm; }
-    return {elapsed:elapsed, deltaMs:deltaMs, projLaps:projLaps, projKm:projKm, targetPaceMs:targetPaceMs};
+    return {elapsed:elapsed, deltaMs:deltaMs, projLaps:projLaps, projKm:projKm};
   }
 
   function render(s){
+    if(!s) return;
     document.getElementById('hero-laps').textContent = s.laps.length;
     document.getElementById('hero-laps-target').textContent = s.cfg.targetLaps;
     var km = s.laps.length*s.cfg.loopKm;
@@ -398,6 +519,7 @@ a.suivi-link{color:var(--accent);font-weight:600;}
 
   function tickLive(){
     var now=Date.now(), s=state;
+    if(!s) return;
     if(s.startedAt){
       var elapsed=now-s.startedAt;
       var remaining=s.cfg.raceDurationH*3600000-elapsed;
@@ -424,6 +546,7 @@ a.suivi-link{color:var(--accent);font-weight:600;}
   setInterval(tickLive, 1000);
 
   document.getElementById('btn-start').addEventListener('click', function(){
+    if(!state) return;
     state.startedAt=Date.now();
     afterLocalChange();
   });
@@ -431,7 +554,7 @@ a.suivi-link{color:var(--accent);font-weight:600;}
 
   var undoArmed=false, undoArmTimer=null;
   document.getElementById('btn-undo').addEventListener('click', function(){
-    if(!state.laps.length) return;
+    if(!state || !state.laps.length) return;
     var btn=document.getElementById('btn-undo');
     if(!undoArmed){
       undoArmed=true; btn.textContent='OK ?';
@@ -455,6 +578,7 @@ a.suivi-link{color:var(--accent);font-weight:600;}
     }
   }
   function onGpsPos(pos){
+    if(!state) return;
     var d=haversineM(pos.coords.latitude,pos.coords.longitude,TRACK[0][0],TRACK[0][1]);
     var lastT = state.laps.length ? state.laps[state.laps.length-1].t : state.startedAt;
     var sinceMs = Date.now()-(lastT||Date.now());
@@ -553,7 +677,7 @@ a.suivi-link{color:var(--accent);font-weight:600;}
 
   var approxPlaying=false;
   function playApprox(){
-    if(!state.startedAt || state.laps.length===0){ toast('Pas encore de tour à rejouer.'); approxPlaying=false; document.getElementById('replay-play-approx').textContent='▶ Lecture'; return; }
+    if(!state || !state.startedAt || state.laps.length===0){ toast('Pas encore de tour à rejouer.'); approxPlaying=false; document.getElementById('replay-play-approx').textContent='▶ Lecture'; return; }
     var svg=document.getElementById('replay-svg-approx');
     var project=makeProjector(TRACK,320,320,24);
     var projPoints=TRACK.map(function(p){ return project(p[0],p[1]); });
@@ -656,9 +780,35 @@ a.suivi-link{color:var(--accent);font-weight:600;}
     else { this.textContent='⏸ Pause'; playReal(); }
   });
 
-  render(state);
-  setSync('pending','Connexion...');
-  pushState();
+  // ---- boot ----
+  (function boot(){
+    if(currentSessionId){
+      var cachedOk=false;
+      try{
+        var cache = JSON.parse(localStorage.getItem('ck-race-cache')||'null');
+        if(cache && cache.cfg){ state=cache; cachedOk=true; }
+      }catch(e){}
+      sessionsRef.doc(currentSessionId).get().then(function(doc){
+        if(doc.exists){
+          var d=doc.data();
+          if(!cachedOk){ state = {cfg:d.cfg||DEFAULT_CFG, startedAt:d.startedAt||null, laps:d.laps||[]}; }
+          showSessionUI(true);
+          document.getElementById('session-current').textContent='Sortie active : '+(d.name||currentSessionId);
+          document.getElementById('session-current').hidden=false;
+          render(state);
+        } else {
+          currentSessionId=null; state=null; saveLocalCache(); showSessionUI(false);
+        }
+        loadSessionsList();
+      }).catch(function(){
+        if(cachedOk){ showSessionUI(true); render(state); }
+        loadSessionsList();
+      });
+    } else {
+      showSessionUI(false);
+      loadSessionsList();
+    }
+  })();
 
   try{
     var savedTab=sessionStorage.getItem('ck-active-tab');
