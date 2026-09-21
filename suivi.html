@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Col de Cénise 24h — Suivi</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders:wght@600;700;800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <style>
 :root{
   --bg:#F5F3EC; --surface:#FFFFFF; --surface-2:#EDEAE0; --ink:#1C2321; --ink-dim:#5B6660;
@@ -88,6 +89,11 @@ h1{margin:2px 0 0;font-family:'Big Shoulders',sans-serif;font-weight:800;font-si
     <p class="pace-note" id="pace-note">La course n'a pas encore commencé.</p>
   </section>
 
+  <section class="card">
+    <h3>Position en direct</h3>
+    <div id="race-map" style="width:100%;height:280px;border-radius:14px;"></div>
+  </section>
+
   <section class="stat-grid">
     <div class="stat-tile"><span class="label">Dernier tour</span><span class="value mono" id="stat-last">--</span></div>
     <div class="stat-tile"><span class="label">Tour moyen</span><span class="value mono" id="stat-avg">--</span></div>
@@ -104,6 +110,7 @@ h1{margin:2px 0 0;font-family:'Big Shoulders',sans-serif;font-weight:800;font-si
 
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
 (function(){
   var FIREBASE_CONFIG = {
@@ -117,6 +124,47 @@ h1{margin:2px 0 0;font-family:'Big Shoulders',sans-serif;font-weight:800;font-si
   firebase.initializeApp(FIREBASE_CONFIG);
   var db = firebase.firestore();
   var sessionsRef = db.collection('race_sessions');
+
+  var TRACK = [[46.019485,6.449133],[46.019457,6.449063],[46.018744,6.448989],[46.01671,6.44905],[46.016173,6.449107],[46.01531,6.449329],[46.01438,6.449471],[46.014323,6.44946],[46.013802,6.448824],[46.013092,6.448316],[46.012453,6.447947],[46.011994,6.447806],[46.011856,6.447808],[46.010469,6.448008],[46.010184,6.448327],[46.009618,6.448753],[46.009026,6.449381],[46.008923,6.449406],[46.008856,6.448886],[46.008924,6.447992],[46.008914,6.447954],[46.008799,6.448001],[46.008683,6.448176],[46.008899,6.447585],[46.009074,6.446899],[46.009269,6.446526],[46.009402,6.445981],[46.009856,6.445073],[46.009934,6.444279],[46.009879,6.443558],[46.010043,6.440977],[46.010522,6.439406],[46.010683,6.439131],[46.01085,6.439051],[46.011152,6.439218],[46.011453,6.439496],[46.012142,6.43997],[46.014079,6.441614],[46.014294,6.441697],[46.014362,6.441685],[46.014404,6.441613],[46.014862,6.442043],[46.014986,6.442258],[46.015226,6.443358],[46.015561,6.443663],[46.016291,6.444487],[46.016582,6.445148],[46.018201,6.447591],[46.018996,6.448543],[46.019354,6.448888],[46.019484,6.44913]];
+
+  function haversineM(lat1,lon1,lat2,lon2){
+    var R=6371000, toRad=Math.PI/180;
+    var dphi=(lat2-lat1)*toRad, dl=(lon2-lon1)*toRad;
+    var a=Math.sin(dphi/2)*Math.sin(dphi/2)+Math.cos(lat1*toRad)*Math.cos(lat2*toRad)*Math.sin(dl/2)*Math.sin(dl/2);
+    return 2*R*Math.asin(Math.sqrt(a));
+  }
+  function hybridKm(s){
+    var laps = s.laps.length;
+    var base = laps * s.cfg.loopKm;
+    var anchor = laps>0 ? s.laps[laps-1].t : s.startedAt;
+    if(!anchor) return base;
+    var pts = (s.track||[]).filter(function(p){ return p.t>=anchor; }).sort(function(a,b){ return a.t-b.t; });
+    var partialM=0;
+    for(var i=1;i<pts.length;i++){ partialM += haversineM(pts[i-1].lat,pts[i-1].lon,pts[i].lat,pts[i].lon); }
+    return base + partialM/1000;
+  }
+
+  var raceMap=null, mapTrackLine=null, mapMarker=null;
+  function ensureMap(){
+    if(raceMap) return raceMap;
+    raceMap = L.map('race-map', {zoomControl:true});
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom:19, attribution:'&copy; OpenStreetMap'
+    }).addTo(raceMap);
+    L.polyline(TRACK, {color:'#5B6660', weight:3, dashArray:'6,6', opacity:.7}).addTo(raceMap);
+    mapTrackLine = L.polyline([], {color:'#E1531F', weight:4}).addTo(raceMap);
+    mapMarker = L.circleMarker(TRACK[0], {radius:7, color:'#E1531F', fillColor:'#E1531F', fillOpacity:1}).addTo(raceMap);
+    raceMap.fitBounds(L.latLngBounds(TRACK), {padding:[16,16]});
+    setTimeout(function(){ raceMap.invalidateSize(); }, 50);
+    return raceMap;
+  }
+  function renderMap(s){
+    if(!raceMap || !s) return;
+    var pts = (s.track||[]).slice().sort(function(a,b){ return a.t-b.t; }).map(function(p){ return [p.lat,p.lon]; });
+    mapTrackLine.setLatLngs(pts);
+    if(pts.length) mapMarker.setLatLng(pts[pts.length-1]);
+  }
+  ensureMap();
 
   function fmtClock(ms){
     ms=Math.max(0,ms);
@@ -169,8 +217,9 @@ h1{margin:2px 0 0;font-family:'Big Shoulders',sans-serif;font-weight:800;font-si
     var s = state;
     document.getElementById('hero-laps').textContent = s.laps.length;
     document.getElementById('hero-laps-target').textContent = s.cfg.targetLaps;
-    var km = s.laps.length*s.cfg.loopKm;
+    var km = hybridKm(s);
     document.getElementById('hero-km').textContent = km.toFixed(1);
+    renderMap(s);
     document.getElementById('hero-km-target').textContent = s.cfg.targetKm;
     document.getElementById('hero-dplus').textContent = Math.round(s.laps.length*s.cfg.loopGainM);
     document.getElementById('hero-progress').style.width = Math.min(100,(s.laps.length/s.cfg.targetLaps)*100)+'%';

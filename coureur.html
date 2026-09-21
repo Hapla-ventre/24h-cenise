@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Col de Cénise 24h — Coureur</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders:wght@600;700;800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <style>
 :root{
   --bg:#F5F3EC; --surface:#FFFFFF; --surface-2:#EDEAE0; --ink:#1C2321; --ink-dim:#5B6660;
@@ -108,12 +109,16 @@ a.suivi-link{color:var(--accent);font-weight:600;}
     <section class="replay-block" id="session-manager">
       <h3>Sorties</h3>
       <p class="fine-print" id="no-session-notice">Aucune sortie active. Crée une nouvelle sortie pour commencer à enregistrer et diffuser en direct sur le lien de suivi.</p>
-      <div class="replay-controls">
-        <button type="button" class="primary" id="btn-new-session">+ Nouvelle sortie</button>
-        <button type="button" id="btn-end-session" hidden>Terminer cette sortie</button>
-      </div>
       <div id="session-current" class="fine-print" hidden></div>
-      <div id="session-list"></div>
+      <div id="session-browser">
+        <div class="replay-controls">
+          <button type="button" class="primary" id="btn-new-session">+ Nouvelle sortie</button>
+        </div>
+        <div id="session-list"></div>
+      </div>
+      <div class="replay-controls" id="session-end-row" hidden>
+        <button type="button" id="btn-end-session">Terminer cette sortie</button>
+      </div>
     </section>
 
     <div id="race-ui" hidden style="display:flex;flex-direction:column;gap:16px;">
@@ -146,8 +151,16 @@ a.suivi-link{color:var(--accent);font-weight:600;}
 
       <nav class="tabs" id="tabs">
         <button class="tab active" data-tab="historique" type="button">Historique</button>
+        <button class="tab" data-tab="carte" type="button">Carte</button>
         <button class="tab" data-tab="replay" type="button">Replay</button>
       </nav>
+
+      <section class="tab-panel" id="panel-carte" hidden>
+        <div class="replay-block">
+          <p class="fine-print">Tracé officiel de la boucle en pointillés, ton parcours réel en orange (mis à jour toutes les 20s via Termux).</p>
+          <div id="race-map" style="width:100%;height:320px;border-radius:14px;"></div>
+        </div>
+      </section>
 
       <section class="tab-panel" id="panel-historique">
         <table class="lap-table">
@@ -197,7 +210,7 @@ a.suivi-link{color:var(--accent);font-weight:600;}
 
     <section class="replay-block" id="setup-card">
       <h3>Tours automatiques en fond (Termux)</h3>
-      <p class="fine-print">Installe Termux + Termux:API (F-Droid), ouvre Termux, puis colle cette commande en une fois : elle installe ce qu'il faut, écrit le script et le lance. Il tourne en silence (aucune vibration, aucun son) et enregistre directement le tour dans l'appli quand tu repasses au départ, même écran éteint — mais seulement pendant qu'une sortie est active. Vérifie de temps en temps l'historique pour repérer un faux positif GPS (tu peux annuler le dernier tour). Une seule fois, pas besoin de recommencer chaque course.</p>
+      <p class="fine-print">Installe Termux + Termux:API (F-Droid), ouvre Termux, puis colle cette commande en une fois : elle installe ce qu'il faut, écrit le script et le lance. Il tourne en silence (aucune vibration, aucun son) et enregistre directement le tour dans l'appli quand tu repasses au départ, même écran éteint — mais seulement pendant qu'une sortie est active. Il envoie aussi ta position GPS toutes les 20s pendant ce temps, pour afficher le tracé réel sur la carte (rien n'est envoyé quand aucune sortie n'est active). Vérifie de temps en temps l'historique pour repérer un faux positif GPS (tu peux annuler le dernier tour). Une seule fois, pas besoin de recommencer chaque course — mais si tu l'avais déjà installé avant cette mise à jour, recolle la commande pour avoir la carte.</p>
       <div class="replay-controls">
         <button type="button" id="btn-copy-setup">Copier la commande d'installation</button>
       </div>
@@ -224,6 +237,7 @@ a.suivi-link{color:var(--accent);font-weight:600;}
 
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
 (function(){
   var FIREBASE_CONFIG = {
@@ -254,6 +268,36 @@ a.suivi-link{color:var(--accent);font-weight:600;}
     return {cum:cum,total:total};
   }
   var TRACK_CUM = buildCumulative(TRACK);
+  function hybridKm(s){
+    var laps = s.laps.length;
+    var base = laps * s.cfg.loopKm;
+    var anchor = laps>0 ? s.laps[laps-1].t : s.startedAt;
+    if(!anchor) return base;
+    var pts = (s.track||[]).filter(function(p){ return p.t>=anchor; }).sort(function(a,b){ return a.t-b.t; });
+    var partialM=0;
+    for(var i=1;i<pts.length;i++){ partialM += haversineM(pts[i-1].lat,pts[i-1].lon,pts[i].lat,pts[i].lon); }
+    return base + partialM/1000;
+  }
+
+  var raceMap=null, mapTrackLine=null, mapMarker=null;
+  function ensureMap(){
+    if(raceMap) return raceMap;
+    raceMap = L.map('race-map', {zoomControl:true});
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom:19, attribution:'&copy; OpenStreetMap'
+    }).addTo(raceMap);
+    L.polyline(TRACK, {color:'#5B6660', weight:3, dashArray:'6,6', opacity:.7}).addTo(raceMap);
+    mapTrackLine = L.polyline([], {color:'#E1531F', weight:4}).addTo(raceMap);
+    mapMarker = L.circleMarker(TRACK[0], {radius:7, color:'#E1531F', fillColor:'#E1531F', fillOpacity:1}).addTo(raceMap);
+    raceMap.fitBounds(L.latLngBounds(TRACK), {padding:[16,16]});
+    return raceMap;
+  }
+  function renderMap(s){
+    if(!raceMap || !s) return;
+    var pts = (s.track||[]).slice().sort(function(a,b){ return a.t-b.t; }).map(function(p){ return [p.lat,p.lon]; });
+    mapTrackLine.setLatLngs(pts);
+    if(pts.length) mapMarker.setLatLng(pts[pts.length-1]);
+  }
   function positionAtFraction(points,cumData,f){
     var target=Math.min(Math.max(f,0),1)*cumData.total, i=1;
     while(i<cumData.cum.length-1 && cumData.cum[i]<target) i++;
@@ -355,8 +399,9 @@ a.suivi-link{color:var(--accent);font-weight:600;}
     document.getElementById('race-ui').hidden = !has;
     document.getElementById('action-bar').hidden = !has;
     document.getElementById('no-session-notice').hidden = has;
-    document.getElementById('btn-end-session').hidden = !has;
+    document.getElementById('session-end-row').hidden = !has;
     document.getElementById('session-current').hidden = !has;
+    if(!has) document.getElementById('session-browser').hidden = false;
   }
 
   function loadSessionsList(){
@@ -373,15 +418,32 @@ a.suivi-link{color:var(--accent);font-weight:600;}
         var span=document.createElement('span');
         span.innerHTML = label;
         row.appendChild(span);
+        var actions=document.createElement('span');
+        actions.style.display='flex'; actions.style.gap='6px';
         if(doc.id!==currentSessionId){
           var btn=document.createElement('button');
           btn.type='button'; btn.textContent='Reprendre'; btn.className='mini-btn';
           btn.addEventListener('click', function(){ resumeSession(doc.id); });
-          row.appendChild(btn);
+          actions.appendChild(btn);
         }
+        var delBtn=document.createElement('button');
+        delBtn.type='button'; delBtn.textContent='Supprimer'; delBtn.className='mini-btn';
+        delBtn.addEventListener('click', function(){ deleteSession(doc.id, d.name||dateTxt); });
+        actions.appendChild(delBtn);
+        row.appendChild(actions);
         box.appendChild(row);
       });
     }).catch(function(){});
+  }
+
+  function deleteSession(id, label){
+    if(!window.confirm('Supprimer définitivement "'+label+'" ? Cette action est irréversible.')) return;
+    sessionsRef.doc(id).delete().then(function(){
+      if(id===currentSessionId){
+        currentSessionId=null; state=null; saveLocalCache(); showSessionUI(false);
+      }
+      loadSessionsList();
+    }).catch(function(){ toast('Impossible de supprimer (réseau ?)'); });
   }
 
   function deactivateAllThenSet(newRef, newData){
@@ -474,12 +536,13 @@ a.suivi-link{color:var(--accent);font-weight:600;}
     if(!s) return;
     document.getElementById('hero-laps').textContent = s.laps.length;
     document.getElementById('hero-laps-target').textContent = s.cfg.targetLaps;
-    var km = s.laps.length*s.cfg.loopKm;
+    var km = hybridKm(s);
     document.getElementById('hero-km').textContent = km.toFixed(1);
     document.getElementById('hero-km-target').textContent = s.cfg.targetKm;
     document.getElementById('hero-dplus').textContent = Math.round(s.laps.length*s.cfg.loopGainM);
     var pct = Math.min(100,(s.laps.length/s.cfg.targetLaps)*100);
     document.getElementById('hero-progress').style.width = pct+'%';
+    if(raceMap) renderMap(s);
 
     var tbody=document.getElementById('lap-rows');
     tbody.innerHTML='';
@@ -514,6 +577,7 @@ a.suivi-link{color:var(--accent);font-weight:600;}
     document.getElementById('btn-start').hidden = !!s.startedAt;
     document.getElementById('btn-lap').hidden = !s.startedAt;
     document.getElementById('btn-undo').hidden = !s.startedAt || s.laps.length===0;
+    document.getElementById('session-browser').hidden = !!s.startedAt;
 
     tickLive();
   }
@@ -600,7 +664,7 @@ a.suivi-link{color:var(--accent);font-weight:600;}
     'pkg update -y && pkg install -y python termux-api',
     'cat > reveil-tour.py << \'PYEOF\'',
     '#!/data/data/com.termux/files/usr/bin/python3',
-    '# reveil-tour.py -- envoie directement les tours a l\'appli (Firestore), en silence.',
+    '# reveil-tour.py -- envoie les tours ET la position GPS reguliere a l\'appli (Firestore), en silence.',
     '# Ne fait rien tant qu\'aucune "sortie" n\'est active dans coureur.html.',
     'import json, math, subprocess, time, urllib.request',
     'PROJECT = "mes-randonnees-314e9"',
@@ -643,6 +707,10 @@ a.suivi-link{color:var(--accent);font-weight:600;}
     '    now_ms = int(time.time() * 1000)',
     '    body = {"writes": [{"transform": {"document": doc_path, "fieldTransforms": [{"fieldPath": "laps", "appendMissingElements": {"values": [{"mapValue": {"fields": {"t": {"integerValue": str(now_ms)}, "source": {"stringValue": "termux"}}}}]}}, {"fieldPath": "updatedAt", "setToServerValue": "REQUEST_TIME"}]}}]}',
     '    http_post(BASE + ":commit", body)',
+    'def append_track_point(session_id, lat, lon, now_ms):',
+    '    doc_path = "projects/" + PROJECT + "/databases/(default)/documents/race_sessions/" + session_id',
+    '    body = {"writes": [{"transform": {"document": doc_path, "fieldTransforms": [{"fieldPath": "track", "appendMissingElements": {"values": [{"mapValue": {"fields": {"t": {"integerValue": str(now_ms)}, "lat": {"doubleValue": lat}, "lon": {"doubleValue": lon}}}}]}}]}}]}',
+    '    http_post(BASE + ":commit", body)',
     'def main():',
     '    armed = False',
     '    last_trigger = 0.0',
@@ -670,6 +738,10 @@ a.suivi-link{color:var(--accent);font-weight:600;}
     '                time.sleep(POLL_S)',
     '                continue',
     '        last_good = (lat, lon, now)',
+    '        try:',
+    '            append_track_point(session_id, lat, lon, int(now * 1000))',
+    '        except Exception:',
+    '            pass',
     '        d = haversine(lat, lon, LAT0, LON0)',
     '        if not armed and d > FAR_M:',
     '            armed = True',
@@ -712,7 +784,12 @@ a.suivi-link{color:var(--accent);font-weight:600;}
       btn.classList.add('active');
       var tab=btn.dataset.tab;
       document.getElementById('panel-historique').hidden = tab!=='historique';
+      document.getElementById('panel-carte').hidden = tab!=='carte';
       document.getElementById('panel-replay').hidden = tab!=='replay';
+      if(tab==='carte'){
+        ensureMap();
+        setTimeout(function(){ raceMap.invalidateSize(); if(state) renderMap(state); }, 50);
+      }
       try{ sessionStorage.setItem('ck-active-tab', tab); }catch(e){}
     });
   });
@@ -854,7 +931,7 @@ a.suivi-link{color:var(--accent);font-weight:600;}
 
   try{
     var savedTab=sessionStorage.getItem('ck-active-tab');
-    if(savedTab==='replay'){ document.querySelector('.tab[data-tab="replay"]').click(); }
+    if(savedTab==='replay' || savedTab==='carte'){ document.querySelector('.tab[data-tab="'+savedTab+'"]').click(); }
   }catch(e){}
   try{
     if(localStorage.getItem('ck-gps-enabled')==='1'){
