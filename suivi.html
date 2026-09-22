@@ -158,11 +158,25 @@ h1{margin:2px 0 0;font-family:'Big Shoulders',sans-serif;font-weight:800;font-si
     setTimeout(function(){ raceMap.invalidateSize(); }, 50);
     return raceMap;
   }
+  var mapAnim=null, mapAnimRAF=null;
+  function animateMapMarker(now){
+    if(!mapAnim){ mapAnimRAF=null; return; }
+    var t=Math.min(1,(now-mapAnim.start)/mapAnim.duration);
+    var lat=mapAnim.from[0]+(mapAnim.to[0]-mapAnim.from[0])*t;
+    var lon=mapAnim.from[1]+(mapAnim.to[1]-mapAnim.from[1])*t;
+    mapMarker.setLatLng([lat,lon]);
+    if(t<1){ mapAnimRAF=requestAnimationFrame(animateMapMarker); } else { mapAnim=null; mapAnimRAF=null; }
+  }
   function renderMap(s){
     if(!raceMap || !s) return;
     var pts = (s.track||[]).slice().sort(function(a,b){ return a.t-b.t; }).map(function(p){ return [p.lat,p.lon]; });
     mapTrackLine.setLatLngs(pts);
-    if(pts.length) mapMarker.setLatLng(pts[pts.length-1]);
+    if(!pts.length) return;
+    var target = pts[pts.length-1];
+    var current = mapMarker.getLatLng();
+    if(current.lat===target[0] && current.lng===target[1]) return;
+    mapAnim = {from:[current.lat,current.lng], to:target, start:performance.now(), duration:15000};
+    if(!mapAnimRAF) mapAnimRAF=requestAnimationFrame(animateMapMarker);
   }
   ensureMap();
 
@@ -186,8 +200,9 @@ h1{margin:2px 0 0;font-family:'Big Shoulders',sans-serif;font-weight:800;font-si
   function paceInfo(s, now){
     if(!s.startedAt) return null;
     var elapsed=now-s.startedAt, n=s.laps.length;
+    var effectiveLaps = hybridKm(s) / s.cfg.loopKm; // credite la progression GPS dans le tour en cours, pas juste les tours complets
     var targetPaceMs = s.cfg.raceDurationH*3600000/s.cfg.targetLaps;
-    var deltaMs = n*targetPaceMs - elapsed;
+    var deltaMs = effectiveLaps*targetPaceMs - elapsed;
     var projLaps=null, projKm=null;
     if(n>0){ var avgPace=elapsed/n; projLaps=(s.cfg.raceDurationH*3600000)/avgPace; projKm=projLaps*s.cfg.loopKm; }
     return {elapsed:elapsed, deltaMs:deltaMs, projLaps:projLaps, projKm:projKm};
