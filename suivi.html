@@ -148,8 +148,8 @@ h1{margin:2px 0 0;font-family:'Big Shoulders',sans-serif;font-weight:800;font-si
   function ensureMap(){
     if(raceMap) return raceMap;
     raceMap = L.map('race-map', {zoomControl:true});
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom:19, attribution:'&copy; OpenStreetMap'
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+      maxZoom:20, attribution:'&copy; OpenStreetMap contributors &copy; CARTO', subdomains:'abcd'
     }).addTo(raceMap);
     L.polyline(TRACK, {color:'#5B6660', weight:3, dashArray:'6,6', opacity:.7}).addTo(raceMap);
     mapTrackLine = L.polyline([], {color:'#E1531F', weight:4}).addTo(raceMap);

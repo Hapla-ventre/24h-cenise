@@ -283,8 +283,8 @@ a.suivi-link{color:var(--accent);font-weight:600;}
   function ensureMap(){
     if(raceMap) return raceMap;
     raceMap = L.map('race-map', {zoomControl:true});
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom:19, attribution:'&copy; OpenStreetMap'
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+      maxZoom:20, attribution:'&copy; OpenStreetMap contributors &copy; CARTO', subdomains:'abcd'
     }).addTo(raceMap);
     L.polyline(TRACK, {color:'#5B6660', weight:3, dashArray:'6,6', opacity:.7}).addTo(raceMap);
     mapTrackLine = L.polyline([], {color:'#E1531F', weight:4}).addTo(raceMap);
@@ -364,12 +364,27 @@ a.suivi-link{color:var(--accent);font-weight:600;}
   var currentSessionId = null;
   try{ currentSessionId = localStorage.getItem('ck-current-session-id') || null; }catch(e){}
   var state = null;
+  var currentUnsub = null;
 
   function saveLocalCache(){
     try{
       localStorage.setItem('ck-current-session-id', currentSessionId || '');
       localStorage.setItem('ck-race-cache', state ? JSON.stringify(state) : '');
     }catch(e){}
+  }
+
+  function subscribeToSession(id){
+    if(currentUnsub){ currentUnsub(); currentUnsub=null; }
+    currentUnsub = sessionsRef.doc(id).onSnapshot(function(doc){
+      if(!doc.exists || id!==currentSessionId) return;
+      var d = doc.data();
+      state = {cfg: d.cfg || DEFAULT_CFG, startedAt: d.startedAt || null, laps: d.laps || [], track: d.track || []};
+      saveLocalCache();
+      render(state);
+    }, function(){ /* erreur reseau : on garde l'etat local courant */ });
+  }
+  function unsubscribeSession(){
+    if(currentUnsub){ currentUnsub(); currentUnsub=null; }
   }
 
   function setSync(status, text){
@@ -380,7 +395,9 @@ a.suivi-link{color:var(--accent);font-weight:600;}
 
   function pushState(){
     if(!currentSessionId || !state) return;
-    var payload = JSON.parse(JSON.stringify(state));
+    // "track" est ecrit exclusivement par Termux (appendMissingElements) : ne jamais le reecrire ici,
+    // sinon un set() avec une copie locale un peu perimee peut effacer un point tout juste arrive.
+    var payload = {cfg: state.cfg, startedAt: state.startedAt, laps: state.laps};
     payload.updatedAt = firebase.firestore.FieldValue.serverTimestamp();
     sessionsRef.doc(currentSessionId).set(payload, {merge:true}).then(function(){
       setSync('ok', 'Synchronisé '+new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit',second:'2-digit'}));
@@ -454,6 +471,7 @@ a.suivi-link{color:var(--accent);font-weight:600;}
     if(!window.confirm('Supprimer définitivement "'+label+'" ? Cette action est irréversible.')) return;
     sessionsRef.doc(id).delete().then(function(){
       if(id===currentSessionId){
+        unsubscribeSession();
         currentSessionId=null; state=null; saveLocalCache(); showSessionUI(false);
       }
       loadSessionsList();
@@ -471,13 +489,14 @@ a.suivi-link{color:var(--accent);font-weight:600;}
 
   function applyLoadedSession(id, d){
     currentSessionId = id;
-    state = {cfg: d.cfg || DEFAULT_CFG, startedAt: d.startedAt || null, laps: d.laps || []};
+    state = {cfg: d.cfg || DEFAULT_CFG, startedAt: d.startedAt || null, laps: d.laps || [], track: d.track || []};
     saveLocalCache();
     showSessionUI(true);
     document.getElementById('session-current').textContent = 'Sortie active : ' + (d.name || id);
     document.getElementById('session-current').hidden = false;
     render(state);
     loadSessionsList();
+    subscribeToSession(id);
   }
 
   function createNewSession(){
@@ -511,6 +530,7 @@ a.suivi-link{color:var(--accent);font-weight:600;}
   function endCurrentSession(){
     if(!currentSessionId) return;
     sessionsRef.doc(currentSessionId).update({active:false, updatedAt: firebase.firestore.FieldValue.serverTimestamp()}).then(function(){
+      unsubscribeSession();
       currentSessionId = null;
       state = null;
       saveLocalCache();
@@ -925,17 +945,18 @@ a.suivi-link{color:var(--accent);font-weight:600;}
       sessionsRef.doc(currentSessionId).get().then(function(doc){
         if(doc.exists){
           var d=doc.data();
-          if(!cachedOk){ state = {cfg:d.cfg||DEFAULT_CFG, startedAt:d.startedAt||null, laps:d.laps||[]}; }
+          if(!cachedOk){ state = {cfg:d.cfg||DEFAULT_CFG, startedAt:d.startedAt||null, laps:d.laps||[], track:d.track||[]}; }
           showSessionUI(true);
           document.getElementById('session-current').textContent='Sortie active : '+(d.name||currentSessionId);
           document.getElementById('session-current').hidden=false;
           render(state);
+          subscribeToSession(currentSessionId);
         } else {
           currentSessionId=null; state=null; saveLocalCache(); showSessionUI(false);
         }
         loadSessionsList();
       }).catch(function(){
-        if(cachedOk){ showSessionUI(true); render(state); }
+        if(cachedOk){ showSessionUI(true); render(state); subscribeToSession(currentSessionId); }
         loadSessionsList();
       });
     } else {
