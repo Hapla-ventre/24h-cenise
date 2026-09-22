@@ -283,8 +283,8 @@ a.suivi-link{color:var(--accent);font-weight:600;}
   function ensureMap(){
     if(raceMap) return raceMap;
     raceMap = L.map('race-map', {zoomControl:true});
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-      maxZoom:20, attribution:'&copy; OpenStreetMap contributors &copy; CARTO', subdomains:'abcd'
+    L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
+      maxZoom:17, attribution:'&copy; OpenStreetMap contributors, SRTM | &copy; OpenTopoMap (CC-BY-SA)'
     }).addTo(raceMap);
     L.polyline(TRACK, {color:'#5B6660', weight:3, dashArray:'6,6', opacity:.7}).addTo(raceMap);
     mapTrackLine = L.polyline([], {color:'#E1531F', weight:4}).addTo(raceMap);
@@ -311,6 +311,12 @@ a.suivi-link{color:var(--accent);font-weight:600;}
     if(current.lat===target[0] && current.lng===target[1]) return;
     mapAnim = {from:[current.lat,current.lng], to:target, start:performance.now(), duration:15000};
     if(!mapAnimRAF) mapAnimRAF=requestAnimationFrame(animateMapMarker);
+  }
+  function clearMap(){
+    mapAnim=null;
+    if(!raceMap) return;
+    mapTrackLine.setLatLngs([]);
+    mapMarker.setLatLng(TRACK[0]);
   }
   function positionAtFraction(points,cumData,f){
     var target=Math.min(Math.max(f,0),1)*cumData.total, i=1;
@@ -472,7 +478,7 @@ a.suivi-link{color:var(--accent);font-weight:600;}
     sessionsRef.doc(id).delete().then(function(){
       if(id===currentSessionId){
         unsubscribeSession();
-        currentSessionId=null; state=null; saveLocalCache(); showSessionUI(false);
+        currentSessionId=null; state=null; saveLocalCache(); showSessionUI(false); clearMap();
       }
       loadSessionsList();
     }).catch(function(){ toast('Impossible de supprimer (réseau ?)'); });
@@ -535,6 +541,7 @@ a.suivi-link{color:var(--accent);font-weight:600;}
       state = null;
       saveLocalCache();
       showSessionUI(false);
+      clearMap();
       loadSessionsList();
     }).catch(function(){ toast('Impossible de terminer la sortie (réseau ?)'); });
   }
