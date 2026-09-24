@@ -27,7 +27,7 @@ BASE = "https://firestore.googleapis.com/v1/" + DOCS
 HERE = os.path.dirname(os.path.abspath(__file__))
 # hors du dossier de l'appli : une mise a jour (qui remplace ce dossier) n'efface pas la course
 DATA_DIR = os.path.expanduser("~/.reveil-tour")
-STATE_FILE = os.path.join(DATA_DIR, "etat.json")
+STATE_FILE = os.path.join(DATA_DIR, "etat.json")  # sortie suivie ; l'etat de chaque sortie est dans etat-<id>.json
 PORT = 8765
 
 LAT0 = 46.019485
@@ -45,6 +45,7 @@ CHUNK_MS = 300000     # un document de trace par tranche de 5 min
 SESSION_CHECK_S = 15
 PAGE_TRUST_S = 600    # la page coureur ouverte fait foi sur la sortie en cours pendant 10 min
 RESTART_STREAM_S = 25 # termux-location -r updates s'arrete seul apres 30 s : on relance avant
+STREAM_MAX_S = 45     # au-dela, un appel GPS est considere comme bloque et arrete
 
 
 def haversine(lat1, lon1, lat2, lon2):
@@ -70,19 +71,31 @@ class Live:
         self.laps = []           # tours detectes ici (ms)
         self.pending_laps = []   # tours pas encore confirmes par Firestore
         self.uploaded_until = 0  # dernier point confirme par Firestore (ms)
+        self.started = None      # heure du depart de la course (ms), None tant qu'elle n'a pas demarre
         self.page_session = None
+        self.page_started = None
         self.page_heard = 0.0
+        self.remote = None       # (sortie, depart) vus dans Firestore
         self.online = False
 
     def points_file(self, sid):
         return os.path.join(DATA_DIR, "points-" + sid + ".jsonl")
 
+    def session_file(self, sid):
+        return os.path.join(DATA_DIR, "etat-" + sid + ".json")
+
     def save(self):
-        tmp = STATE_FILE + ".tmp"
-        with open(tmp, "w") as f:
-            json.dump({"session_id": self.session_id, "laps": self.laps, "pending_laps": self.pending_laps,
-                       "uploaded_until": self.uploaded_until}, f)
-        os.replace(tmp, STATE_FILE)
+        """Enregistre l'etat de la sortie suivie. Appele avec le verrou tenu."""
+        def write(path, data):
+            tmp = path + ".tmp"
+            with open(tmp, "w") as f:
+                json.dump(data, f)
+            os.replace(tmp, path)
+        write(STATE_FILE, {"session_id": self.session_id})
+        if self.session_id:
+            write(self.session_file(self.session_id), {
+                "started": self.started, "laps": self.laps,
+                "pending_laps": self.pending_laps, "uploaded_until": self.uploaded_until})
 
     def load_points(self, sid):
         pts = []
@@ -97,24 +110,35 @@ class Live:
             pass
         return pts
 
+    def load_session(self, sid):
+        """Charge tout ce qui est garde pour une sortie (points, tours, envois). Verrou tenu."""
+        self.session_id = sid
+        self.started, self.laps, self.pending_laps, self.uploaded_until = None, [], [], 0
+        self.points = []
+        if not sid:
+            return
+        self.points = self.load_points(sid)
+        try:
+            with open(self.session_file(sid)) as f:
+                st = json.load(f)
+            self.started = st.get("started")
+            self.laps = st.get("laps", [])
+            self.pending_laps = st.get("pending_laps", [])
+            self.uploaded_until = st.get("uploaded_until", 0)
+        except (OSError, ValueError):
+            pass
+
     def restore(self):
         try:
             with open(STATE_FILE) as f:
-                st = json.load(f)
+                self.load_session(json.load(f).get("session_id"))
         except (OSError, ValueError):
-            return
-        self.session_id = st.get("session_id")
-        self.laps = st.get("laps", [])
-        self.pending_laps = st.get("pending_laps", [])
-        self.uploaded_until = st.get("uploaded_until", 0)
-        if self.session_id:
-            self.points = self.load_points(self.session_id)
+            pass
 
     def switch(self, sid):
-        """Change de sortie. Appele avec le verrou tenu."""
-        self.session_id = sid
-        self.points = self.load_points(sid) if sid else []
-        self.laps, self.pending_laps, self.uploaded_until = [], [], 0
+        """Change de sortie sans rien perdre de l'ancienne (tout est deja sur disque). Verrou tenu."""
+        self.save()
+        self.load_session(sid)
         self.save()
 
     def add_point(self, p):
@@ -154,6 +178,7 @@ class Handler(SimpleHTTPRequestHandler):
         with live.lock:
             if "session" in q:
                 live.page_session = (q.get("session", [""])[0] or None)
+                live.page_started = int(q.get("started", ["0"])[0] or 0) or None
                 live.page_heard = time.time()
             same = live.page_session is not None and live.page_session == live.session_id
             body = {
@@ -188,7 +213,7 @@ def http(method, url, body=None):
     data = json.dumps(body).encode("utf-8") if body is not None else None
     req = urllib.request.Request(url, data=data, headers={"Content-Type": "application/json"}, method=method)
     try:
-        with urllib.request.urlopen(req, timeout=15) as resp:
+        with urllib.request.urlopen(req, timeout=10) as resp:
             out = json.loads(resp.read().decode("utf-8"))
         live.online = True
         return out
@@ -215,8 +240,9 @@ def get_active_session():
         return ERR
     for r in results:
         if "document" in r:
-            return r["document"]["name"].split("/")[-1]
-    return None
+            started = r["document"].get("fields", {}).get("startedAt", {}).get("integerValue")
+            return (r["document"]["name"].split("/")[-1], int(started) if started else None)
+    return (None, None)
 
 
 def upload_points(session_id, pts):
@@ -294,6 +320,10 @@ def run_one_stream(out_q):
                              stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
     except Exception:
         return
+    # filet de securite : un appel bloque est arrete, pour ne pas en accumuler
+    killer = threading.Timer(STREAM_MAX_S, p.kill)
+    killer.daemon = True
+    killer.start()
     buf, depth = "", 0
     for ch in iter(lambda: p.stdout.read(1), ""):
         if ch == "{":
@@ -309,6 +339,7 @@ def run_one_stream(out_q):
                     pass
                 buf = ""
     p.wait()
+    killer.cancel()
 
 
 def location_streams(out_q):
@@ -317,7 +348,57 @@ def location_streams(out_q):
         time.sleep(RESTART_STREAM_S)
 
 
-# ---- boucle principale ----
+# ---- envois vers Firestore, dans leur propre fil ----
+# Le reseau peut etre lent ou absent (15 s d'attente par envoi) : il ne doit jamais retarder la
+# lecture du GPS ni la detection des tours, qui se font dans la boucle principale.
+
+def net_loop():
+    next_session_check = 0.0
+    last_upload = 0.0
+    last_lap_try = 0.0
+    was_online = None
+    while True:
+        now = time.time()
+        with live.lock:
+            page_fresh = now - live.page_heard < PAGE_TRUST_S
+        if not page_fresh and now >= next_session_check:
+            next_session_check = now + SESSION_CHECK_S
+            r = get_active_session()
+            if r is not ERR:
+                with live.lock:
+                    live.remote = r
+        session_id = live.session_id
+
+        if session_id and live.pending_laps and now - last_lap_try >= 10:
+            last_lap_try = now
+            done = [t for t in list(live.pending_laps) if send_lap(session_id, t)]
+            if done:
+                with live.lock:
+                    if live.session_id == session_id:
+                        live.pending_laps = [t for t in live.pending_laps if t not in done]
+                        live.save()
+
+        if session_id and now - last_upload >= UPLOAD_EVERY_S:
+            last_upload = now
+            with live.lock:
+                batch = [p for p in live.points if p["t"] > live.uploaded_until][:2000]
+            if batch:
+                try:
+                    upload_points(session_id, batch)
+                    with live.lock:
+                        if live.session_id == session_id:
+                            live.uploaded_until = max(live.uploaded_until, batch[-1]["t"])
+                            live.save()
+                except Exception:
+                    pass
+
+        if was_online is not None and live.online != was_online:
+            log("reseau revenu, envoi de ce qui attendait" if live.online else "plus de reseau : tout est garde sur le telephone")
+        was_online = live.online
+        time.sleep(2)
+
+
+# ---- boucle principale : GPS + tours ----
 
 def main(stream=location_streams):
     os.makedirs(DATA_DIR, exist_ok=True)
@@ -327,15 +408,13 @@ def main(stream=location_streams):
     except Exception:
         pass
     threading.Thread(target=serve, daemon=True).start()
+    threading.Thread(target=net_loop, daemon=True).start()
     q = queue.Queue()
     threading.Thread(target=stream, args=(q,), daemon=True).start()
     log("reveil-tour demarre. Appli coureur (marche sans reseau) : http://localhost:%d/coureur.html" % PORT)
     if live.session_id:
         log("reprise de la sortie", live.session_id, "-", len(live.points), "points deja enregistres")
 
-    next_session_check = 0.0
-    last_upload = 0.0
-    last_lap_try = 0.0
     last_status = time.time()
     last_fix_t = 0.0
     last_good = None
@@ -343,7 +422,6 @@ def main(stream=location_streams):
     min_dist = None
     min_dist_t = None
     last_lap_t = max(live.laps) / 1000.0 if live.laps else 0.0
-    was_online = None
 
     while True:
         now = time.time()
@@ -351,20 +429,26 @@ def main(stream=location_streams):
         # quelle sortie ? la page coureur ouverte fait foi (elle marche hors ligne) ; sinon
         # Firestore quand il y a du reseau ; sinon la derniere connue.
         with live.lock:
-            page_fresh = now - live.page_heard < PAGE_TRUST_S
-            wanted = live.page_session if page_fresh else live.session_id
-        if not page_fresh and now >= next_session_check:
-            next_session_check = now + SESSION_CHECK_S
-            sid = get_active_session()
-            if sid is not ERR:
-                wanted = sid
-        if wanted != live.session_id:
-            with live.lock:
+            if now - live.page_heard < PAGE_TRUST_S:
+                wanted, started = live.page_session, live.page_started
+            elif live.remote is not None:
+                wanted, started = live.remote
+            else:
+                wanted, started = live.session_id, live.started
+            if wanted != live.session_id:
                 live.switch(wanted)
+                switched = True
+            else:
+                switched = False
+            if started != live.started:
+                live.started = started
+                live.save()
+        if switched:
             armed, min_dist, min_dist_t, last_good = False, None, None, None
-            last_lap_t = 0.0
+            last_lap_t = max(live.laps) / 1000.0 if live.laps else 0.0
             log("sortie active :", wanted or "aucune")
         session_id = live.session_id
+        started_s = live.started / 1000.0 if live.started else None
 
         try:
             recv_t, loc = q.get(timeout=1)
@@ -387,8 +471,11 @@ def main(stream=location_streams):
                 last_good = (lat, lon, fix_t)
                 live.add_point({"t": int(fix_t * 1000), "lat": lat, "lon": lon, "a": int(round(acc or 0))})
 
+                # pas de tour tant que la course n'a pas demarre (echauffement autour du depart)
                 d = haversine(lat, lon, LAT0, LON0)
-                if not armed and d > FAR_M:
+                if started_s is None or fix_t < started_s:
+                    armed, min_dist, min_dist_t = False, None, None
+                elif not armed and d > FAR_M:
                     armed, min_dist, min_dist_t = True, None, None
                 if armed:
                     if min_dist is None or d < min_dist:
@@ -398,7 +485,7 @@ def main(stream=location_streams):
                         lap_t = fix_t
                     elif min_dist <= CAPTURE_M and d > min_dist + MOVE_AWAY_M:
                         lap_t = min_dist_t
-                    if lap_t is not None and lap_t - last_lap_t > MIN_LAP_S:
+                    if lap_t is not None and lap_t - max(last_lap_t, started_s) > MIN_LAP_S:
                         armed, min_dist, min_dist_t = False, None, None
                         last_lap_t = lap_t
                         with live.lock:
@@ -406,31 +493,6 @@ def main(stream=location_streams):
                             live.pending_laps.append(int(lap_t * 1000))
                             live.save()
                         log("tour detecte")
-
-        if session_id and live.pending_laps and now - last_lap_try >= 10:
-            last_lap_try = now
-            done = [t for t in list(live.pending_laps) if send_lap(session_id, t)]
-            if done:
-                with live.lock:
-                    live.pending_laps = [t for t in live.pending_laps if t not in done]
-                    live.save()
-
-        if session_id and now - last_upload >= UPLOAD_EVERY_S:
-            last_upload = now
-            with live.lock:
-                batch = [p for p in live.points if p["t"] > live.uploaded_until][:2000]
-            if batch:
-                try:
-                    upload_points(session_id, batch)
-                    with live.lock:
-                        live.uploaded_until = max(live.uploaded_until, batch[-1]["t"])
-                        live.save()
-                except Exception:
-                    pass
-
-        if was_online is not None and live.online != was_online:
-            log("reseau revenu, envoi de ce qui attendait" if live.online else "plus de reseau : tout est garde sur le telephone")
-        was_online = live.online
 
         if session_id and now - last_status >= 300:
             last_status = now

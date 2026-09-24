@@ -429,7 +429,8 @@ a.suivi-link{color:var(--accent);font-weight:600;}
     if(!LOCAL_API) return; // meme page cachee : c'est elle qui dit a Termux quelle sortie suivre
     if(localPtsFor!==currentSessionId){ localPts={}; localPtsFor=currentSessionId; localSince=0; }
     var sid=currentSessionId||'';
-    fetch('/api/live?session='+encodeURIComponent(sid)+'&since='+localSince, {cache:'no-store'})
+    var started = state && state.startedAt ? state.startedAt : '';
+    fetch('/api/live?session='+encodeURIComponent(sid)+'&started='+started+'&since='+localSince, {cache:'no-store'})
       .then(function(r){ return r.json(); })
       .then(function(d){
         termuxLocal={t:Date.now(), online:d.online, pendingPts:d.pendingPts, pendingLaps:d.pendingLaps};
@@ -562,7 +563,8 @@ a.suivi-link{color:var(--accent);font-weight:600;}
 
   function makeState(cfg, startedAt, rawLaps, legacyTrack){
     var s = {cfg: cfg || DEFAULT_CFG, startedAt: startedAt || null, rawLaps: rawLaps || [], legacyTrack: legacyTrack || []};
-    s.laps = normLaps(s.rawLaps);
+    // un tour avant le depart (echauffement, test) ne compte pas
+    s.laps = normLaps(s.rawLaps.filter(function(l){ return s.startedAt && l.t>=s.startedAt; }));
     s.track = allTrackPoints(s.legacyTrack);
     s.prog = computeProg(s);
     return s;
@@ -570,10 +572,23 @@ a.suivi-link{color:var(--accent);font-weight:600;}
   function stateFromDoc(d){ return makeState(d.cfg, d.startedAt, d.laps, d.track); }
 
   function saveLocalCache(){
-    try{
-      localStorage.setItem('ck-current-session-id', currentSessionId || '');
-      localStorage.setItem('ck-race-cache', state ? JSON.stringify({cfg:state.cfg, startedAt:state.startedAt, rawLaps:state.rawLaps}) : '');
-    }catch(e){}
+    try{ localStorage.setItem('ck-race-cache', state ? JSON.stringify({cfg:state.cfg, startedAt:state.startedAt, rawLaps:state.rawLaps}) : ''); }catch(e){}
+  }
+  // La sortie suivie n'est ecrite qu'au moment ou elle change (creation, reprise, fin) : les autres
+  // onglets ouverts se rechargent alors dessus (voir l'ecouteur 'storage').
+  function setCurrentSession(id){
+    currentSessionId = id;
+    try{ localStorage.setItem('ck-current-session-id', id || ''); }catch(e){}
+  }
+  // Quitte la sortie en cours dans cette page, sans rien ecrire (elle a pu etre terminee ailleurs).
+  function leaveSession(){
+    unsubscribeSession();
+    setCurrentSession(null);
+    state = null;
+    saveLocalCache();
+    showSessionUI(false);
+    clearMap();
+    loadSessionsList();
   }
 
   // Toute l'ecriture des tours passe par des ajouts/retraits unitaires (arrayUnion/arrayRemove) :
@@ -583,7 +598,10 @@ a.suivi-link{color:var(--accent);font-weight:600;}
     if(currentUnsub){ currentUnsub(); currentUnsub=null; }
     currentUnsub = sessionsRef.doc(id).onSnapshot({includeMetadataChanges:true}, function(doc){
       if(!doc.exists || id!==currentSessionId) return;
-      state = stateFromDoc(doc.data());
+      var d = doc.data();
+      // terminee depuis un autre onglet ou un autre appareil : on la quitte ici aussi
+      if(d.active===false && !doc.metadata.hasPendingWrites){ leaveSession(); toast('Cette sortie a été terminée.'); return; }
+      state = stateFromDoc(d);
       if(doc.metadata.hasPendingWrites) setSync('pending', 'En attente de réseau — rien n\'est perdu');
       else if(doc.metadata.fromCache) setSync('pending', 'Hors ligne — données locales');
       else setSync('ok', 'Synchronisé '+new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit',second:'2-digit'}));
@@ -608,6 +626,11 @@ a.suivi-link{color:var(--accent);font-weight:600;}
     updateGeoWatch();
   });
   function sessionDoc(){ return sessionsRef.doc(currentSessionId); }
+  // Plusieurs onglets de l'appli ouverts (ex. icone d'accueil + onglet Chrome) : si la sortie
+  // change dans l'un, les autres se rechargent, sinon ils donneraient a Termux des sorties differentes.
+  window.addEventListener('storage', function(e){
+    if(e.key==='ck-current-session-id' && (e.newValue||null)!==currentSessionId) location.reload();
+  });
 
   function setSync(status, text){
     var dot=document.getElementById('sync-dot'), t=document.getElementById('sync-text');
@@ -656,7 +679,7 @@ a.suivi-link{color:var(--accent);font-weight:600;}
         var row=document.createElement('div');
         row.className='session-row';
         var dateTxt = d.createdAt && d.createdAt.toDate ? d.createdAt.toDate().toLocaleString('fr-FR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}) : '';
-        var laps = normLaps(d.laps).length;
+        var laps = normLaps((d.laps||[]).filter(function(l){ return d.startedAt && l.t>=d.startedAt; })).length;
         var label = (d.active ? '<span class="session-dot"></span>' : '') + (d.name||dateTxt) + ' — ' + laps + ' tours';
         var span=document.createElement('span');
         span.innerHTML = label;
@@ -688,9 +711,8 @@ a.suivi-link{color:var(--accent);font-weight:600;}
       batches.forEach(function(b){ b.commit().catch(writeFailed); });
       if(id===currentSessionId){
         unsubscribeSession();
-        currentSessionId=null; state=null; saveLocalCache(); showSessionUI(false); clearMap();
-      }
-      loadSessionsList();
+        leaveSession();
+      } else loadSessionsList();
     });
   }
 
@@ -707,7 +729,7 @@ a.suivi-link{color:var(--accent);font-weight:600;}
   }
 
   function applyLoadedSession(id, d){
-    currentSessionId = id;
+    setCurrentSession(id);
     unsubscribeTrack();
     state = stateFromDoc(d);
     saveLocalCache();
@@ -751,13 +773,7 @@ a.suivi-link{color:var(--accent);font-weight:600;}
   function endCurrentSession(){
     if(!currentSessionId) return;
     sessionsRef.doc(currentSessionId).update({active:false, updatedAt: firebase.firestore.FieldValue.serverTimestamp()}).catch(writeFailed);
-    unsubscribeSession();
-    currentSessionId = null;
-    state = null;
-    saveLocalCache();
-    showSessionUI(false);
-    clearMap();
-    loadSessionsList();
+    leaveSession();
   }
 
   document.getElementById('btn-new-session').addEventListener('click', createNewSession);
@@ -1110,7 +1126,7 @@ a.suivi-link{color:var(--accent);font-weight:600;}
           render(state);
           subscribeToSession(currentSessionId);
         } else {
-          currentSessionId=null; state=null; saveLocalCache(); showSessionUI(false);
+          setCurrentSession(null); state=null; saveLocalCache(); showSessionUI(false);
         }
         loadSessionsList();
       }).catch(function(){

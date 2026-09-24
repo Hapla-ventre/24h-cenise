@@ -440,7 +440,10 @@ h1{margin:2px 0 0;font-family:'Big Shoulders',sans-serif;font-weight:800;font-si
   }
   setInterval(tickLive, 1000);
 
-  sessionsRef.where('active','==',true).limit(1).onSnapshot(function(snap){
+  var activeUnsub=null;
+  function subscribeActive(){
+    if(activeUnsub) activeUnsub();
+    activeUnsub = sessionsRef.where('active','==',true).limit(1).onSnapshot(function(snap){
     if(snap.empty){
       subscribeTrack(null);
       state = null;
@@ -452,12 +455,23 @@ h1{margin:2px 0 0;font-family:'Big Shoulders',sans-serif;font-weight:800;font-si
     lastUpdatedAtMs = data.updatedAt && data.updatedAt.toMillis ? data.updatedAt.toMillis() : Date.now();
     subscribeTrack(doc.id);
     state = {cfg: data.cfg || {targetLaps:29,targetKm:100,loopKm:3.454,loopGainM:127,raceDurationH:24},
-             startedAt: data.startedAt || null, laps: normLaps(data.laps), legacyTrack: data.track || []};
+             startedAt: data.startedAt || null, legacyTrack: data.track || []};
+    // un tour avant le depart (echauffement, test) ne compte pas
+    state.laps = normLaps((data.laps||[]).filter(function(l){ return state.startedAt && l.t>=state.startedAt; }));
     state.track = allTrackPoints(state.legacyTrack);
     state.prog = computeProg(state);
     render();
   }, function(err){
     document.getElementById('freshness').textContent = 'Connexion impossible';
+  });
+  }
+  subscribeActive();
+  // telephone du suiveur mis en veille : au retour, on relance l'ecoute (le canal temps reel peut
+  // rester endormi un moment) et on reprend tout le trace
+  document.addEventListener('visibilitychange', function(){
+    if(document.hidden) return;
+    var id=trackFor; subscribeTrack(null); subscribeTrack(id);
+    subscribeActive();
   });
 })();
 </script>
