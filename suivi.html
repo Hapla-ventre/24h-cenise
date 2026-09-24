@@ -60,6 +60,7 @@ h1{margin:2px 0 0;font-family:'Big Shoulders',sans-serif;font-weight:800;font-si
 .lap-row:last-child{border-bottom:0;}
 .src-badge{font-size:10px;text-transform:uppercase;letter-spacing:.03em;padding:2px 6px;border-radius:6px;background:var(--surface-2);color:var(--ink-dim);}
 .empty-note{color:var(--ink-dim);font-size:14px;text-align:center;padding:10px 0;margin:0;}
+.map-recenter{background:#fff;color:#1C2321;border:2px solid rgba(0,0,0,.2);border-radius:6px;padding:7px 11px;font:600 13px system-ui,sans-serif;cursor:pointer;box-shadow:0 1px 4px rgba(0,0,0,.15);}
 </style>
 </head>
 <body>
@@ -289,6 +290,15 @@ h1{margin:2px 0 0;font-family:'Big Shoulders',sans-serif;font-weight:800;font-si
     L.polyline(TRACK, {color:'#5B6660', weight:3, dashArray:'6,6', opacity:.7}).addTo(raceMap);
     mapDoneLine = L.polyline([], {color:'#E1531F', weight:5}).addTo(raceMap);
     mapMarker = L.circleMarker(TRACK[0], {radius:8, color:'#FFFFFF', weight:2, fillColor:'#E1531F', fillOpacity:1}).addTo(raceMap);
+    // bouton "Recentrer" : ramene la carte sur la position affichee (le point orange)
+    var RecenterCtl = L.Control.extend({options:{position:'topright'}, onAdd:function(){
+      var b = L.DomUtil.create('button', 'map-recenter');
+      b.type = 'button'; b.title = 'Recentrer sur le coureur'; b.textContent = '◎ Recentrer';
+      L.DomEvent.disableClickPropagation(b);
+      L.DomEvent.on(b, 'click', function(){ raceMap.setView(mapMarker.getLatLng(), Math.max(raceMap.getZoom(), 16)); });
+      return b;
+    }});
+    new RecenterCtl().addTo(raceMap);
     raceMap.fitBounds(L.latLngBounds(TRACK), {padding:[16,16]});
     setTimeout(function(){ raceMap.invalidateSize(); }, 50);
     return raceMap;
