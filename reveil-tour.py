@@ -419,6 +419,7 @@ def main(stream=location_streams):
         log("reprise de la sortie", live.session_id, "-", len(live.points), "points deja enregistres")
 
     last_status = time.time()
+    gps_silent_logged = False
     last_fix_t = 0.0
     last_good = None
     armed = False
@@ -496,6 +497,17 @@ def main(stream=location_streams):
                             live.pending_laps.append(int(lap_t * 1000))
                             live.save()
                         log("tour detecte")
+
+        # GPS muet : on le signale dans Termux (cause probable : Android a mis la localisation de
+        # Termux:API en pause, ecran eteint ou economie d'energie)
+        if session_id and last_fix_t:
+            silent = now - last_fix_t
+            if silent > 90 and not gps_silent_logged:
+                gps_silent_logged = True
+                log("ATTENTION : plus de position GPS depuis", int(silent), "s (localisation mise en pause par Android ?)")
+            elif silent <= 90 and gps_silent_logged:
+                gps_silent_logged = False
+                log("GPS revenu")
 
         if session_id and now - last_status >= 300:
             last_status = now

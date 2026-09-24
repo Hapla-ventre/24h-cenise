@@ -438,7 +438,12 @@ a.suivi-link{color:var(--accent);font-weight:600;}
       .then(function(d){
         termuxLocal={t:Date.now(), online:d.online, pendingPts:d.pendingPts, pendingLaps:d.pendingLaps};
         // positions : "Synchronise" = dernier envoi reussi de Termux vers le serveur (donc le suivi)
-        if(!docPending && d.lastUpload) setSync(!d.online && d.pendingPts>0 ? 'pending' : 'ok', 'Synchronisé '+fmtTimeSec(d.lastUpload));
+        // rien en attente = tout est deja chez le serveur (meme si aucune nouvelle position n'est arrivee)
+        if(!docPending){
+          if(d.pendingPts===0 && d.pendingLaps===0) syncedNow();
+          else if(d.online && d.lastUpload) setSync('ok', 'Synchronisé '+fmtTimeSec(d.lastUpload));
+          else setSync('pending', 'Hors ligne — envoi en attente');
+        }
         if(!currentSessionId || sid!==currentSessionId || d.session!==currentSessionId) return;
         d.points.forEach(function(p){ localPts[p.t]=p; if(p.t>localSince) localSince=p.t; });
         importTermuxLaps(d.laps);
