@@ -152,8 +152,10 @@ h1{margin:2px 0 0;font-family:'Big Shoulders',sans-serif;font-weight:800;font-si
   var MAX_SPEED_MS = 6;      // on ne peut pas avancer plus vite que ca le long du chemin
 
   // Projection sur le trace. Pres du depart, le debut et la fin de la boucle sont a ~45 m l'un de
-  // l'autre : parmi les portions candidates, on garde celle qui est juste devant la position connue.
-  function snapForward(lat, lon, prevM){
+  // l'autre : quand plusieurs portions du trace sont a peu pres aussi proches du point GPS, on garde
+  // celle qui colle le mieux a ta vitesse du moment (avance attendue = vitesse x temps ecoule), pas
+  // simplement celle qui avance le moins.
+  function snapForward(lat, lon, prevM, expectedFwd){
     var x=(lon-TRACK[0][1])*M_LON, y=(lat-TRACK[0][0])*M_LAT, cands=[], dmin=Infinity, i;
     for(i=1;i<ROUTE_XY.length;i++){
       var ax=ROUTE_XY[i-1][0], ay=ROUTE_XY[i-1][1], bx=ROUTE_XY[i][0], by=ROUTE_XY[i][1];
@@ -164,34 +166,46 @@ h1{margin:2px 0 0;font-family:'Big Shoulders',sans-serif;font-weight:800;font-si
       cands.push({d:d, m:m});
       if(d<dmin) dmin=d;
     }
-    var best=null;
-    cands.forEach(function(c){
+    var base=((prevM%ROUTE_M)+ROUTE_M)%ROUTE_M, exp=expectedFwd||0, best=null, n=cands.length;
+    cands.forEach(function(c, k){
       if(c.d>dmin+SNAP_TIE_M) return;
-      var fwd=((c.m-prevM)%ROUTE_M+ROUTE_M)%ROUTE_M;
-      if(!best || fwd<best.fwd) best={fwd:fwd, d:dmin};
+      // une seule candidate par portion du chemin : le point le plus proche de cette portion
+      // (sinon les segments voisins d'une meme portion se font concurrence)
+      if(c.d>cands[(k-1+n)%n].d || c.d>cands[(k+1)%n].d) return;
+      var fwd=((c.m-base)%ROUTE_M+ROUTE_M)%ROUTE_M;
+      var eff = fwd>ROUTE_M*0.8 ? 0 : fwd; // un peu derriere = bruit GPS, on reste sur place
+      var score=Math.abs(eff-exp)+(c.d-dmin);
+      if(!best || score<best.score) best={fwd:eff, d:c.d, score:score};
     });
     return best;
   }
-  // Fait avancer la progression (en metres le long du trace, dans le tour en cours) avec un point.
-  // Renvoie la nouvelle progression, ou null si le point est a ignorer.
-  function advance(prevM, prevT, lat, lon, t){
-    var s=snapForward(lat, lon, prevM);
+  // Tant que le tour n'est pas enregistre (Termux le valide au passage, ou tu tapes le bouton), la
+  // progression peut deborder un peu au-dela de l'arrivee : le point continue sur le debut du tour
+  // suivant au lieu de rester bloque au depart.
+  var OVERFLOW_M = 600;
+  var DEFAULT_SPEED_MS = 2.5;
+  // Fait avancer la progression (en metres le long du trace, depuis le debut du tour) avec un point.
+  // Renvoie {m, v} (progression, vitesse estimee), ou null si le point est a ignorer.
+  function advance(prevM, prevT, lat, lon, t, speed){
+    var v = speed || DEFAULT_SPEED_MS, dt = Math.max(0, t-prevT)/1000;
+    var s=snapForward(lat, lon, prevM, v*dt);
     if(!s || s.d>SNAP_MAX_OFF_M) return null;
-    var fwd = s.fwd>ROUTE_M*0.8 ? 0 : s.fwd;  // leger recul du au bruit GPS : on reste sur place
-    if(fwd > 30+Math.max(0,t-prevT)/1000*MAX_SPEED_MS) return null; // saut impossible a pied
-    return Math.min(ROUTE_M, prevM+fwd);
+    if(s.fwd > 30+dt*MAX_SPEED_MS) return null; // saut impossible a pied
+    var m=Math.min(ROUTE_M+OVERFLOW_M, prevM+s.fwd);
+    if(dt>0) v = Math.max(0.3, Math.min(MAX_SPEED_MS, 0.7*v + 0.3*(m-prevM)/dt));
+    return {m:m, v:v};
   }
   // Progression le long du trace pour chaque point GPS du tour en cours (depuis le dernier tour).
   function lapProgress(pts, anchorT){
-    var out=[], m=0, lastT=anchorT;
+    var out=[], m=0, v=DEFAULT_SPEED_MS, lastT=anchorT;
     if(!anchorT) return out;
     for(var i=0;i<pts.length;i++){
       var p=pts[i];
       if(p.t<anchorT) continue;
-      var nm=advance(m, lastT, p.lat, p.lon, p.t);
-      if(nm===null) continue;
-      m=nm; lastT=p.t;
-      out.push({t:p.t, m:m});
+      var r=advance(m, lastT, p.lat, p.lon, p.t, v);
+      if(r===null) continue;
+      m=r.m; v=r.v; lastT=p.t;
+      out.push({t:p.t, m:m, v:v});
     }
     return out;
   }
@@ -205,15 +219,16 @@ h1{margin:2px 0 0;font-family:'Big Shoulders',sans-serif;font-weight:800;font-si
     return base + Math.min(m/ROUTE_M, 0.99)*s.cfg.loopKm;
   }
   function routePointAt(m){
-    m=Math.max(0, Math.min(ROUTE_M, m));
+    m=Math.max(0, m);
+    if(m>ROUTE_M) m-=ROUTE_M; // debordement sur le tour suivant
     var lo=0, hi=ROUTE_CUM.cum.length-1;
     while(hi-lo>1){ var mid=(lo+hi)>>1; if(ROUTE_CUM.cum[mid]<=m) lo=mid; else hi=mid; }
     var seg=ROUTE_CUM.cum[hi]-ROUTE_CUM.cum[lo], f = seg>0 ? (m-ROUTE_CUM.cum[lo])/seg : 0;
     return {idx:lo, ll:[TRACK[lo][0]+(TRACK[hi][0]-TRACK[lo][0])*f, TRACK[lo][1]+(TRACK[hi][1]-TRACK[lo][1])*f]};
   }
   function routeSliceTo(m){
-    var p=routePointAt(m);
-    return TRACK.slice(0, p.idx+1).concat([p.ll]);
+    var p=routePointAt(m), part=TRACK.slice(0, p.idx+1).concat([p.ll]);
+    return m>ROUTE_M ? [TRACK.slice(), part] : part; // boucle complete + debut du tour suivant
   }
   // Progression a l'instant T, interpolee le long du trace entre deux points GPS.
   function progAt(prog, T){

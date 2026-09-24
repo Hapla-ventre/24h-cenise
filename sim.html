@@ -184,17 +184,17 @@ input[type=range]{flex:1;min-width:160px;accent-color:var(--accent);}
       if(lt!==null && lt-lastLap>T.MIN_LAP_MS){ armed=false; minD=null; lastLap=lt; laps.push(lt); }
     });
     // 3) progression le long du chemin, tour par tour, exactement comme l'appli
-    var t0 = n ? Math.min(startedAt || pts[0].t, pts[0].t) : 0, anchors = [t0].concat(laps), m=0, mT=t0, a=0;
+    var t0 = n ? Math.min(startedAt || pts[0].t, pts[0].t) : 0, anchors = [t0].concat(laps), m=0, mT=t0, v=0, a=0;
     kept.forEach(function(k){
       var p = pts[k];
       while(a+1<anchors.length && p.t>=anchors[a+1]){ a++; m=0; mT=anchors[a]; }
-      var nm = R.advance(m, mT, p.lat, p.lon, p.t);
-      if(nm===null){
+      var r = R.advance(m, mT, p.lat, p.lon, p.t, v);
+      if(r===null){
         var s = R.snapForward(p.lat, p.lon, m);
         status[k] = {ok:false, why: (!s || s.d>R.SNAP_MAX_OFF_M) ? 'à plus de '+R.SNAP_MAX_OFF_M+' m du chemin' : 'avance impossible à pied depuis le point précédent'};
         return;
       }
-      m=nm; mT=p.t;
+      m=r.m; v=r.v; mT=p.t;
       status[k] = {ok:true, lap:a, m:m};
     });
     analysis = {status:status, laps:laps, t0:t0};
