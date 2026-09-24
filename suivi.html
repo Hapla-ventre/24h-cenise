@@ -4,6 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Col de Cénise 24h — Suivi</title>
+<meta name="description" content="Suivi en direct des 24h en boucle au Col de Cénise : tours, kilomètres, position sur la carte, puis le résultat final.">
+<meta property="og:title" content="Col de Cénise · 24h en boucle — suivi en direct">
+<meta property="og:description" content="Tours, kilomètres et position en direct sur la carte, puis le résultat final.">
+<meta property="og:type" content="website">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders:wght@600;700;800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="vendor/leaflet.css">
 <style>
@@ -32,6 +36,17 @@ body{background:var(--bg);color:var(--ink);font-family:'IBM Plex Sans',system-ui
 .eyebrow{display:flex;align-items:center;gap:8px;font-size:12px;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-dim);}
 .live-dot{width:8px;height:8px;border-radius:50%;background:var(--good);}
 .live-dot.stale{background:var(--danger);}
+.live-dot.done{background:var(--ink-dim);}
+.finish-banner{position:relative;overflow:hidden;background:var(--surface);border:2px solid var(--ink);border-radius:20px;padding:24px 20px 16px;box-shadow:var(--shadow);}
+.finish-banner::before{content:'';position:absolute;left:0;right:0;top:0;height:10px;background:repeating-conic-gradient(var(--ink) 0 25%, var(--surface) 0 50%) 0 0/10px 10px;}
+.finish-flag{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-dim);font-weight:600;}
+.finish-title{font-family:'Big Shoulders',sans-serif;font-weight:800;font-size:26px;line-height:1.1;margin-top:4px;}
+.finish-sub{font-size:14px;color:var(--ink-dim);margin-top:4px;}
+.replay-row{display:flex;gap:10px;align-items:center;margin-top:10px;}
+.replay-row button{font:inherit;font-size:14px;font-weight:600;padding:8px 12px;border-radius:10px;border:1px solid var(--line);background:var(--accent);color:#fff;cursor:pointer;white-space:nowrap;}
+.replay-row input{flex:1;min-width:0;accent-color:var(--accent);}
+.replay-label{font-size:12px;color:var(--ink-dim);margin:6px 0 0;}
+.lap-row .best{color:var(--good);font-weight:600;}
 h1{margin:2px 0 0;font-family:'Big Shoulders',sans-serif;font-weight:800;font-size:26px;line-height:1;}
 .hero-card{background:var(--surface);border:1px solid var(--line);border-radius:20px;padding:20px;box-shadow:var(--shadow);}
 .hero-main{display:flex;align-items:baseline;gap:8px;font-family:'Big Shoulders',sans-serif;}
@@ -70,6 +85,12 @@ h1{margin:2px 0 0;font-family:'Big Shoulders',sans-serif;font-weight:800;font-si
     <h1>Col de Cénise · 24h en boucle</h1>
   </header>
 
+  <section class="finish-banner" id="finish-banner" hidden>
+    <div class="finish-flag">🏁 Photo finish · dernière course</div>
+    <div class="finish-title" id="finish-title"></div>
+    <div class="finish-sub" id="finish-sub"></div>
+  </section>
+
   <section class="hero-card">
     <div class="hero-main">
       <span class="hero-number" id="hero-laps">0</span>
@@ -80,9 +101,9 @@ h1{margin:2px 0 0;font-family:'Big Shoulders',sans-serif;font-weight:800;font-si
   </section>
 
   <section class="clock-row">
-    <div class="clock-tile"><span class="label">Écoulé</span><span class="value mono" id="clock-elapsed">00:00:00</span></div>
-    <div class="clock-tile"><span class="label">Restant</span><span class="value mono" id="clock-remaining">24:00:00</span></div>
-    <div class="clock-tile"><span class="label">Fin prévue</span><span class="value mono" id="clock-end">--:--</span></div>
+    <div class="clock-tile"><span class="label" id="clock-l1">Écoulé</span><span class="value mono" id="clock-elapsed">00:00:00</span></div>
+    <div class="clock-tile"><span class="label" id="clock-l2">Restant</span><span class="value mono" id="clock-remaining">24:00:00</span></div>
+    <div class="clock-tile"><span class="label" id="clock-l3">Fin prévue</span><span class="value mono" id="clock-end">--:--</span></div>
   </section>
 
   <section class="pace-card">
@@ -91,8 +112,13 @@ h1{margin:2px 0 0;font-family:'Big Shoulders',sans-serif;font-weight:800;font-si
   </section>
 
   <section class="card">
-    <h3>Position en direct</h3>
+    <h3 id="map-title">Position en direct</h3>
     <div id="race-map" style="width:100%;height:280px;border-radius:14px;"></div>
+    <div class="replay-row" id="replay-row" hidden>
+      <button type="button" id="replay-btn">▶ Revoir la course</button>
+      <input type="range" id="replay-range" min="0" max="1000" value="1000" aria-label="Moment de la course">
+    </div>
+    <p class="replay-label mono" id="replay-label" hidden></p>
   </section>
 
   <section class="stat-grid">
@@ -103,7 +129,7 @@ h1{margin:2px 0 0;font-family:'Big Shoulders',sans-serif;font-weight:800;font-si
   </section>
 
   <section class="card">
-    <h3>Derniers tours</h3>
+    <h3 id="laps-title">Derniers tours</h3>
     <div id="lap-list"></div>
     <p class="empty-note" id="lap-empty">Aucun tour pour l'instant.</p>
   </section>
@@ -124,6 +150,8 @@ h1{margin:2px 0 0;font-family:'Big Shoulders',sans-serif;font-weight:800;font-si
   };
   firebase.initializeApp(FIREBASE_CONFIG);
   var db = firebase.firestore();
+  // cache local : en revenant sur la page, seules les nouveautes sont relues (quota gratuit)
+  try{ db.enablePersistence({synchronizeTabs:true}).catch(function(){}); }catch(e){}
   var sessionsRef = db.collection('race_sessions');
 
   var TRACK = [[46.019485,6.449133],[46.01947,6.449099],[46.019457,6.449063],[46.019175,6.449044],[46.0191,6.449036],[46.018963,6.449023],[46.018744,6.448989],[46.018479,6.448989],[46.018261,6.448993],[46.018082,6.448992],[46.017908,6.449],[46.017658,6.449023],[46.017444,6.449031],[46.017221,6.449035],[46.016991,6.449042],[46.01671,6.44905],[46.01656,6.449063],[46.016365,6.449076],[46.016173,6.449107],[46.015939,6.449162],[46.015545,6.449238],[46.01549,6.449253],[46.015443,6.449301],[46.01531,6.449329],[46.015192,6.449352],[46.01497,6.449381],[46.014821,6.449393],[46.014699,6.449404],[46.014565,6.449452],[46.014442,6.449471],[46.01438,6.449471],[46.014323,6.44946],[46.014247,6.449373],[46.014011,6.44909],[46.013876,6.448895],[46.013802,6.448824],[46.01361,6.44869],[46.013436,6.448571],[46.013258,6.448426],[46.013092,6.448316],[46.012902,6.448198],[46.012669,6.448065],[46.012453,6.447947],[46.012302,6.447896],[46.012133,6.447848],[46.011994,6.447806],[46.011856,6.447808],[46.011619,6.44786],[46.011442,6.447882],[46.011285,6.447908],[46.011113,6.447922],[46.011003,6.447946],[46.010883,6.447946],[46.010808,6.447949],[46.010767,6.447967],[46.010592,6.447967],[46.010527,6.447977],[46.010469,6.448008],[46.010374,6.448077],[46.010303,6.448154],[46.010258,6.448222],[46.010213,6.448295],[46.010184,6.448327],[46.010136,6.448354],[46.010054,6.44844],[46.009977,6.44848],[46.009936,6.448519],[46.009866,6.448551],[46.009805,6.448598],[46.00971,6.448684],[46.009618,6.448753],[46.009572,6.448816],[46.0095,6.448905],[46.009365,6.449026],[46.009216,6.449166],[46.009214,6.449169],[46.009064,6.449333],[46.009026,6.449381],[46.008997,6.449404],[46.008948,6.449421],[46.008923,6.449406],[46.008917,6.449312],[46.008888,6.449196],[46.008869,6.44909],[46.008858,6.448999],[46.008856,6.448886],[46.00887,6.44871],[46.00889,6.448522],[46.008901,6.44829],[46.008912,6.448118],[46.008926,6.448034],[46.008924,6.447992],[46.008914,6.447954],[46.00883,6.44798],[46.008813,6.447993],[46.008799,6.448001],[46.008792,6.448029],[46.008757,6.44807],[46.008727,6.448115],[46.008683,6.448176],[46.008698,6.448126],[46.00874,6.448038],[46.008758,6.447996],[46.008774,6.447958],[46.008784,6.447929],[46.008786,6.447906],[46.008831,6.447796],[46.008843,6.447738],[46.008876,6.447643],[46.008899,6.447585],[46.008942,6.44743],[46.008963,6.447344],[46.00901,6.447188],[46.009018,6.447122],[46.009043,6.446994],[46.009065,6.44694],[46.009074,6.446899],[46.0091,6.446849],[46.009129,6.446816],[46.0092,6.446685],[46.009241,6.446599],[46.009269,6.446526],[46.00929,6.446412],[46.009321,6.446277],[46.009353,6.446131],[46.009402,6.445981],[46.009452,6.445882],[46.009489,6.445821],[46.009552,6.445737],[46.009596,6.445624],[46.009655,6.445482],[46.009679,6.445445],[46.009699,6.445398],[46.009734,6.445339],[46.009758,6.445289],[46.009765,6.445248],[46.00978,6.445214],[46.009819,6.445157],[46.009836,6.445136],[46.009856,6.445073],[46.009867,6.445026],[46.009871,6.444896],[46.009874,6.444627],[46.00989,6.444565],[46.009893,6.444513],[46.00992,6.444444],[46.009925,6.444359],[46.009934,6.444279],[46.009929,6.444227],[46.00991,6.444141],[46.009908,6.444065],[46.009913,6.444015],[46.009893,6.443923],[46.009881,6.443828],[46.009879,6.443715],[46.009879,6.443558],[46.009892,6.443412],[46.009913,6.443247],[46.00992,6.4432],[46.00992,6.443117],[46.00992,6.443086],[46.009926,6.443041],[46.009924,6.44295],[46.009946,6.442761],[46.00996,6.442662],[46.009973,6.442389],[46.00999,6.442161],[46.010007,6.442005],[46.010009,6.441983],[46.010015,6.44184],[46.010013,6.44178],[46.010014,6.441504],[46.010025,6.441262],[46.01004,6.441126],[46.010043,6.440977],[46.010068,6.440858],[46.010112,6.44072],[46.010175,6.440583],[46.010205,6.440526],[46.010223,6.440469],[46.010244,6.4404],[46.010293,6.440239],[46.010334,6.440042],[46.010362,6.43992],[46.010387,6.439758],[46.010412,6.439705],[46.010463,6.439579],[46.010522,6.439406],[46.0106,6.439243],[46.010683,6.439131],[46.010708,6.439113],[46.010741,6.439101],[46.010772,6.439096],[46.0108,6.439081],[46.01085,6.439051],[46.010938,6.439085],[46.01101,6.439123],[46.011152,6.439218],[46.011279,6.439319],[46.011368,6.439408],[46.011453,6.439496],[46.011534,6.439553],[46.011622,6.439606],[46.011714,6.439669],[46.01179,6.439728],[46.011883,6.439797],[46.011973,6.439863],[46.012142,6.43997],[46.012238,6.440047],[46.012312,6.440115],[46.012392,6.440185],[46.012469,6.440243],[46.012517,6.440278],[46.012548,6.4403],[46.012646,6.44039],[46.012741,6.440478],[46.012853,6.440569],[46.012963,6.440653],[46.013057,6.440729],[46.013085,6.440758],[46.013187,6.44086],[46.013292,6.440958],[46.013555,6.441177],[46.013817,6.441396],[46.014079,6.441614],[46.014294,6.441697],[46.014362,6.441685],[46.014404,6.441613],[46.014663,6.441836],[46.014773,6.441945],[46.014862,6.442043],[46.014916,6.442109],[46.014957,6.442188],[46.014986,6.442258],[46.01501,6.442358],[46.015031,6.442474],[46.015042,6.442568],[46.015056,6.442638],[46.015076,6.442706],[46.015125,6.442832],[46.015143,6.442888],[46.015152,6.44294],[46.015171,6.443149],[46.015183,6.443237],[46.015196,6.443295],[46.015212,6.443333],[46.015226,6.443358],[46.015248,6.443383],[46.01531,6.443444],[46.015437,6.443544],[46.015561,6.443663],[46.015822,6.443949],[46.016064,6.444221],[46.016209,6.44438],[46.016291,6.444487],[46.016322,6.444542],[46.016369,6.444635],[46.016427,6.444778],[46.016484,6.444931],[46.016517,6.445022],[46.016546,6.445086],[46.016582,6.445148],[46.016645,6.445239],[46.016799,6.445445],[46.016891,6.445594],[46.016977,6.445738],[46.017043,6.445849],[46.017196,6.446103],[46.01731,6.446288],[46.017432,6.446464],[46.017532,6.446601],[46.017685,6.446796],[46.017796,6.446943],[46.017889,6.447085],[46.018056,6.447348],[46.01814,6.447499],[46.018201,6.447591],[46.018284,6.447693],[46.018505,6.44794],[46.0186,6.44805],[46.018717,6.448192],[46.018869,6.448368],[46.018996,6.448543],[46.019051,6.448597],[46.019228,6.448762],[46.019354,6.448888],[46.019399,6.448943],[46.019428,6.448988],[46.019457,6.449063],[46.01947,6.449099],[46.019484,6.44913]];
@@ -271,10 +299,10 @@ h1{margin:2px 0 0;font-family:'Big Shoulders',sans-serif;font-weight:800;font-si
     }, function(){});
   }
   function allTrackPoints(legacy){
-    var pts=(legacy||[]).slice();
-    Object.keys(trackChunks).forEach(function(k){ Array.prototype.push.apply(pts, trackChunks[k]); });
-    pts.sort(function(a,b){ return a.t-b.t; });
-    return pts;
+    var byT={};
+    (legacy||[]).forEach(function(p){ byT[p.t]=p; });
+    Object.keys(trackChunks).forEach(function(k){ trackChunks[k].forEach(function(p){ byT[p.t]=p; }); });
+    return Object.keys(byT).map(function(k){ return byT[k]; }).sort(function(a,b){ return a.t-b.t; });
   }
 
   var raceMap=null, mapDoneLine=null, mapMarker=null;
@@ -329,8 +357,59 @@ h1{margin:2px 0 0;font-family:'Big Shoulders',sans-serif;font-weight:800;font-si
     var lag = Math.min.apply(null, arrivalLags);
     return Math.max(-60000, Math.min(120000, lag + BATCH_EVERY_MS + 2000));
   }
+  // Course terminee : la carte montre l'arrivee, ou rejoue toute la course (curseur / bouton).
+  var replay = {frac:1, playing:false, raf:null};
+  var REPLAY_MS = 40000;
+  function finalView(){
+    var s=state, f=s.final, T = s.startedAt + replay.frac*(f.end - s.startedAt);
+    var done = s.laps.filter(function(l){ return l.t<=T; }).length;
+    var m = Math.min(ROUTE_M, progAt(f.lapProgs[done]||[], T));
+    mapDoneLine.setLatLngs(done ? routeSliceTo(ROUTE_M + Math.min(m, ROUTE_M-1)) : routeSliceTo(m));
+    mapMarker.setLatLng(routePointAt(m).ll);
+    if(replay.frac<1){
+      var km = done*s.cfg.loopKm + Math.min(m/ROUTE_M, 0.99)*s.cfg.loopKm;
+      document.getElementById('hero-laps').textContent = done;
+      document.getElementById('hero-km').textContent = km.toFixed(1);
+      document.getElementById('hero-dplus').textContent = Math.round(done*s.cfg.loopGainM);
+      document.getElementById('hero-progress').style.width = Math.min(100,(done/s.cfg.targetLaps)*100)+'%';
+      var lbl=document.getElementById('replay-label');
+      lbl.hidden=false; lbl.textContent = fmtClock(T-s.startedAt)+' de course · tour '+(Math.min(done+1, s.laps.length+1))+' · '+fmtTime(T);
+    } else {
+      document.getElementById('replay-label').hidden=true;
+    }
+  }
+  function stopReplay(){
+    replay.playing=false; replay.frac=1;
+    if(replay.raf) cancelAnimationFrame(replay.raf);
+    document.getElementById('replay-btn').textContent='▶ Revoir la course';
+    document.getElementById('replay-range').value=1000;
+  }
+  document.getElementById('replay-btn').addEventListener('click', function(){
+    if(!state || !state.final) return;
+    var btn=this;
+    if(replay.playing){ replay.playing=false; btn.textContent='▶ Reprendre'; return; }
+    if(replay.frac>=1) replay.frac=0;
+    replay.playing=true; btn.textContent='⏸ Pause';
+    var f0=replay.frac, t0=performance.now();
+    (function frame(now){
+      if(!replay.playing || !state || !state.final) return;
+      replay.frac=Math.min(1, f0+(now-t0)/REPLAY_MS);
+      document.getElementById('replay-range').value=Math.round(replay.frac*1000);
+      finalView();
+      if(replay.frac<1) replay.raf=requestAnimationFrame(frame);
+      else { replay.playing=false; btn.textContent='▶ Revoir la course'; render(); }
+    })(t0);
+  });
+  document.getElementById('replay-range').addEventListener('input', function(){
+    if(!state || !state.final) return;
+    replay.playing=false; document.getElementById('replay-btn').textContent='▶ Reprendre';
+    replay.frac=this.value/1000;
+    if(replay.frac>=1){ stopReplay(); render(); } else finalView();
+  });
+
   function tickMap(){
     if(!raceMap || !state || document.hidden) return;
+    if(state.final){ if(!replay.playing) finalView(); return; }
     if(!state.startedAt){ clearMap(); return; }
     var m = progAt(state.prog||[], Date.now()-remotePlaybackDelay());
     mapDoneLine.setLatLngs(routeSliceTo(m));
@@ -375,6 +454,15 @@ h1{margin:2px 0 0;font-family:'Big Shoulders',sans-serif;font-weight:800;font-si
   }
 
   function render(){
+    var fin = !!(state && state.final);
+    document.getElementById('finish-banner').hidden = !fin;
+    document.getElementById('replay-row').hidden = !fin;
+    document.getElementById('map-title').textContent = fin ? 'Parcours de la course' : 'Position en direct';
+    document.getElementById('laps-title').textContent = fin ? 'Tous les tours' : 'Derniers tours';
+    document.getElementById('clock-l1').textContent = fin ? 'Durée' : 'Écoulé';
+    document.getElementById('clock-l2').textContent = fin ? 'Départ' : 'Restant';
+    document.getElementById('clock-l3').textContent = fin ? 'Arrivée' : 'Fin prévue';
+    if(fin && replay.frac<1) return; // pendant le rejeu, c'est lui qui met a jour les compteurs
     if(!state){
       clearMap();
       document.getElementById('live-dot').className = 'live-dot stale';
@@ -424,12 +512,23 @@ h1{margin:2px 0 0;font-family:'Big Shoulders',sans-serif;font-weight:800;font-si
     var list=document.getElementById('lap-list');
     list.innerHTML='';
     document.getElementById('lap-empty').hidden = s.laps.length>0;
-    s.laps.map(function(l,idx){ return {l:l, num:idx+1}; }).slice(-8).reverse().forEach(function(item){
+    var bestDur = durations.length ? Math.min.apply(null, durations) : null;
+    s.laps.map(function(l,idx){ return {l:l, num:idx+1, dur:durations[idx]}; }).slice(s.final ? 0 : -8).reverse().forEach(function(item){
       var row=document.createElement('div');
       row.className='lap-row';
-      row.innerHTML='<span>Tour '+item.num+'</span><span class="mono">'+fmtTime(item.l.t)+'</span>';
+      if(s.final){
+        var best = item.dur===bestDur && durations.length>1;
+        row.innerHTML='<span>Tour '+item.num+(best ? ' <span class="best">★ meilleur</span>' : '')+'</span><span class="mono">'+fmtDur(item.dur)+' · '+fmtTime(item.l.t)+'</span>';
+      } else {
+        row.innerHTML='<span>Tour '+item.num+'</span><span class="mono">'+fmtTime(item.l.t)+'</span>';
+      }
       list.appendChild(row);
     });
+    if(s.final){
+      var f=s.final, dur=f.end-s.startedAt, kmTot=hybridKm(s);
+      document.getElementById('finish-title').textContent = s.laps.length+' tour'+(s.laps.length>1?'s':'')+' · '+kmTot.toFixed(1)+' km';
+      document.getElementById('finish-sub').textContent = (f.name ? f.name+' · ' : '')+Math.round(s.laps.length*s.cfg.loopGainM)+' m D+ en '+fmtDur(dur);
+    }
 
     tickLive();
   }
@@ -438,6 +537,21 @@ h1{margin:2px 0 0;font-family:'Big Shoulders',sans-serif;font-weight:800;font-si
     var now=Date.now();
     if(!state){ return; }
     var s=state;
+    if(s.final){
+      var f=s.final;
+      document.getElementById('clock-elapsed').textContent=fmtClock(f.end-s.startedAt);
+      document.getElementById('clock-remaining').textContent=fmtTime(s.startedAt);
+      document.getElementById('clock-end').textContent=fmtTime(f.end);
+      var pill=document.getElementById('pace-pill'), n=s.laps.length, target=s.cfg.targetLaps;
+      pill.className='pace-pill '+(n>=target?'is-good':'');
+      pill.textContent = n>=target ? 'Objectif atteint 🎉' : n+' / '+target+' tours';
+      var avg = n ? (s.laps[n-1].t-s.startedAt)/n : null;
+      document.getElementById('pace-note').textContent = (n>=target ? 'Objectif de '+target+' tours atteint' : 'Objectif : '+target+' tours')
+        + (avg ? ' · '+fmtDur(avg)+' en moyenne par tour.' : '.');
+      document.getElementById('live-dot').className='live-dot done';
+      document.getElementById('freshness').textContent='Course terminée · '+new Date(f.end).toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'});
+      return;
+    }
     if(s.startedAt){
       var elapsed=now-s.startedAt;
       var remaining=s.cfg.raceDurationH*3600000-elapsed;
@@ -471,17 +585,52 @@ h1{margin:2px 0 0;font-family:'Big Shoulders',sans-serif;font-weight:800;font-si
   }
   setInterval(tickLive, 1000);
 
+  // Pas de course en cours : on affiche le resultat de la derniere course terminee ("photo finish").
+  var finalToken=0;
+  function loadLastRace(){
+    var token=++finalToken;
+    sessionsRef.orderBy('createdAt','desc').limit(10).get().then(function(snap){
+      if(token!==finalToken) return;
+      var doc=null;
+      snap.forEach(function(d){ var x=d.data(); if(!doc && !x.active && x.startedAt) doc=d; });
+      if(!doc){ state=null; render(); return; }
+      return sessionsRef.where('trackOf','==',doc.id).get().then(function(chunks){
+        if(token!==finalToken) return;
+        var d=doc.data(), cfg=d.cfg||{targetLaps:29,targetKm:100,loopKm:3.454,loopGainM:127,raceDurationH:24};
+        var end = d.endedAt || (d.updatedAt && d.updatedAt.toMillis ? d.updatedAt.toMillis() : Date.now());
+        end = Math.min(end, d.startedAt + cfg.raceDurationH*3600000);
+        var pts=(d.track||[]).slice();
+        chunks.forEach(function(c){ Array.prototype.push.apply(pts, c.data().pts||[]); });
+        pts = pts.filter(function(p){ return p.t>=d.startedAt && p.t<=end; }).sort(function(a,b){ return a.t-b.t; });
+        var laps = normLaps((d.laps||[]).filter(function(l){ return l.t>=d.startedAt && l.t<=end; }));
+        // progression recalee tour par tour, pour le rejeu
+        var anchors=[d.startedAt].concat(laps.map(function(l){ return l.t; })), lapProgs=[];
+        for(var i=0;i<anchors.length;i++){
+          var from=anchors[i], to=i+1<anchors.length ? anchors[i+1] : Infinity;
+          lapProgs.push(lapProgress(pts.filter(function(p){ return p.t>=from && p.t<to; }), from));
+        }
+        state = {cfg:cfg, startedAt:d.startedAt, laps:laps, legacyTrack:[], track:pts, prog:lapProgs[lapProgs.length-1],
+                 final:{end:end, name:d.name||'', lapProgs:lapProgs}};
+        stopReplay();
+        render();
+      });
+    }).catch(function(){
+      if(token===finalToken) document.getElementById('freshness').textContent = 'Connexion impossible';
+    });
+  }
+
   var activeUnsub=null;
   function subscribeActive(){
     if(activeUnsub) activeUnsub();
     activeUnsub = sessionsRef.where('active','==',true).limit(1).onSnapshot(function(snap){
     if(snap.empty){
       subscribeTrack(null);
-      state = null;
       lastUpdatedAtMs = null;
-      render();
+      if(!state || !state.final) loadLastRace();
       return;
     }
+    finalToken++; // une course demarre : on quitte le photo finish
+    if(state && state.final){ stopReplay(); state=null; }
     var doc = snap.docs[0], data = doc.data();
     lastUpdatedAtMs = data.updatedAt && data.updatedAt.toMillis ? data.updatedAt.toMillis() : Date.now();
     subscribeTrack(doc.id);
@@ -499,9 +648,25 @@ h1{margin:2px 0 0;font-family:'Big Shoulders',sans-serif;font-weight:800;font-si
   subscribeActive();
   // telephone du suiveur mis en veille : au retour, on relance l'ecoute (le canal temps reel peut
   // rester endormi un moment) et on reprend tout le trace
+  // Page en arriere-plan plus de 30 s : on coupe l'ecoute en direct (chaque suiveur qui laisse
+  // l'onglet ouvert consommerait sinon ~360 lectures par heure sur le quota gratuit partage).
+  // Au retour, on la relance : grace au cache local, seules les nouveautes sont relues.
+  var pauseTimer=null, paused=false, pausedTrack=null;
   document.addEventListener('visibilitychange', function(){
-    if(document.hidden) return;
-    var id=trackFor; subscribeTrack(null); subscribeTrack(id);
+    if(document.hidden){
+      clearTimeout(pauseTimer);
+      pauseTimer=setTimeout(function(){
+        paused=true; pausedTrack=trackFor;
+        if(activeUnsub){ activeUnsub(); activeUnsub=null; }
+        subscribeTrack(null);
+      }, 30000);
+      return;
+    }
+    clearTimeout(pauseTimer);
+    if(!paused) return;
+    paused=false;
+    var id=pausedTrack; pausedTrack=null;
+    if(id) subscribeTrack(id);
     subscribeActive();
   });
 })();

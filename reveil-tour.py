@@ -41,7 +41,7 @@ LAP_DEDUP_S = 300     # un tour deja enregistre (manuel ou auto) a moins de 5 mi
 MAX_ACCURACY_M = 50   # ignore les positions moins precises que ca
 MAX_SPEED_MS = 7.0    # ~25 km/h : au-dela, un "saut" de position est un rebond GPS
 UPLOAD_EVERY_S = 10
-CHUNK_MS = 300000     # un document de trace par tranche de 5 min
+CHUNK_MS = 900000     # un document de trace par tranche de 15 min (moins de lectures pour chaque suiveur)
 SESSION_CHECK_S = 15
 PAGE_TRUST_S = 600    # la page coureur ouverte fait foi sur la sortie en cours pendant 10 min
 RESTART_STREAM_S = 25 # termux-location -r updates s'arrete seul apres 30 s : on relance avant
@@ -71,6 +71,7 @@ class Live:
         self.laps = []           # tours detectes ici (ms)
         self.pending_laps = []   # tours pas encore confirmes par Firestore
         self.uploaded_until = 0  # dernier point confirme par Firestore (ms)
+        self.last_upload = 0     # heure du dernier envoi reussi (ms)
         self.started = None      # heure du depart de la course (ms), None tant qu'elle n'a pas demarre
         self.page_session = None
         self.page_started = None
@@ -188,6 +189,7 @@ class Handler(SimpleHTTPRequestHandler):
                 "online": live.online,
                 "pendingPts": sum(1 for p in live.points if p["t"] > live.uploaded_until),
                 "pendingLaps": len(live.pending_laps),
+                "lastUpload": live.last_upload,
             }
         data = json.dumps(body).encode("utf-8")
         self.send_response(200)
@@ -386,6 +388,7 @@ def net_loop():
                 try:
                     upload_points(session_id, batch)
                     with live.lock:
+                        live.last_upload = int(time.time() * 1000)
                         if live.session_id == session_id:
                             live.uploaded_until = max(live.uploaded_until, batch[-1]["t"])
                             live.save()

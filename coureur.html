@@ -398,6 +398,7 @@ a.suivi-link{color:var(--accent);font-weight:600;}
   function subscribeTrack(id, onChange){
     if(trackUnsub){ trackUnsub(); trackUnsub=null; }
     if(trackFor!==id){ trackChunks={}; trackFor=id; }
+    if(LOCAL_API) return; // appli servie par Termux : les positions viennent de lui directement
     trackUnsub = sessionsRef.where('trackOf','==',id).onSnapshot(function(snap){
       // un paquet de positions confirme par le serveur = le suivi l'a aussi
       if(!snap.metadata.fromCache && !docPending) syncedNow();
@@ -436,6 +437,8 @@ a.suivi-link{color:var(--accent);font-weight:600;}
       .then(function(r){ return r.json(); })
       .then(function(d){
         termuxLocal={t:Date.now(), online:d.online, pendingPts:d.pendingPts, pendingLaps:d.pendingLaps};
+        // positions : "Synchronise" = dernier envoi reussi de Termux vers le serveur (donc le suivi)
+        if(!docPending && d.lastUpload) setSync(!d.online && d.pendingPts>0 ? 'pending' : 'ok', 'Synchronisé '+fmtTimeSec(d.lastUpload));
         if(!currentSessionId || sid!==currentSessionId || d.session!==currentSessionId) return;
         d.points.forEach(function(p){ localPts[p.t]=p; if(p.t>localSince) localSince=p.t; });
         importTermuxLaps(d.laps);
@@ -808,7 +811,7 @@ a.suivi-link{color:var(--accent);font-weight:600;}
 
   function endCurrentSession(){
     if(!currentSessionId) return;
-    sessionsRef.doc(currentSessionId).update({active:false, updatedAt: firebase.firestore.FieldValue.serverTimestamp()}).catch(writeFailed);
+    sessionsRef.doc(currentSessionId).update({active:false, endedAt: Date.now(), updatedAt: firebase.firestore.FieldValue.serverTimestamp()}).catch(writeFailed);
     leaveSession();
   }
 
