@@ -38,11 +38,10 @@ body{background:var(--bg);color:var(--ink);font-family:'IBM Plex Sans',system-ui
 .live-dot{width:8px;height:8px;border-radius:50%;background:var(--good);}
 .live-dot.stale{background:var(--danger);}
 .live-dot.done{background:var(--ink-dim);}
-.finish-banner{position:relative;overflow:hidden;background:var(--surface);border:2px solid var(--ink);border-radius:20px;padding:24px 20px 16px;box-shadow:var(--shadow);}
-.finish-banner::before{content:'';position:absolute;left:0;right:0;top:0;height:10px;background:repeating-conic-gradient(var(--ink) 0 25%, var(--surface) 0 50%) 0 0/10px 10px;}
-.finish-flag{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-dim);font-weight:600;}
-.finish-title{font-family:'Big Shoulders',sans-serif;font-weight:800;font-size:26px;line-height:1.1;margin-top:4px;}
-.finish-sub{font-size:14px;color:var(--ink-dim);margin-top:4px;}
+.hero-card.is-finish{position:relative;overflow:hidden;border:2px solid var(--ink);padding-top:26px;}
+.hero-card.is-finish::before{content:'';position:absolute;left:0;right:0;top:0;height:10px;background:repeating-conic-gradient(var(--ink) 0 25%, var(--surface) 0 50%) 0 0/10px 10px;}
+.finish-flag{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-dim);font-weight:600;margin-bottom:6px;}
+.finish-sub{font-size:14px;color:var(--ink-dim);margin-top:10px;}
 .replay-row{display:flex;gap:10px;align-items:center;margin-top:10px;}
 .replay-row button{font:inherit;font-size:14px;font-weight:600;padding:8px 12px;border-radius:10px;border:1px solid var(--line);background:var(--accent);color:#fff;cursor:pointer;white-space:nowrap;}
 .replay-row input{flex:1;min-width:0;accent-color:var(--accent);}
@@ -98,19 +97,15 @@ h1{margin:2px 0 0;font-family:'Big Shoulders',sans-serif;font-weight:800;font-si
     <h1>Col de Cénise · 24h en boucle</h1>
   </header>
 
-  <section class="finish-banner" id="finish-banner" hidden>
-    <div class="finish-flag">🏁 Photo finish · dernière course</div>
-    <div class="finish-title" id="finish-title"></div>
-    <div class="finish-sub" id="finish-sub"></div>
-  </section>
-
-  <section class="hero-card">
+  <section class="hero-card" id="hero-card">
+    <div class="finish-flag" id="finish-flag" hidden>🏁 Photo finish · dernière course</div>
     <div class="hero-main">
       <span class="hero-number" id="hero-laps">0</span>
       <span class="hero-unit">/ <span id="hero-laps-target">29</span> tours</span>
     </div>
     <div class="hero-sub"><span id="hero-km">0.0</span> / <span id="hero-km-target">100</span> km<span class="dot">·</span><span id="hero-dplus">0</span> m D+</div>
     <div class="hero-progress-track"><div class="hero-progress-fill" id="hero-progress" style="width:0%"></div></div>
+    <div class="finish-sub" id="finish-sub" hidden></div>
   </section>
 
   <section class="clock-row">
@@ -149,7 +144,7 @@ h1{margin:2px 0 0;font-family:'Big Shoulders',sans-serif;font-weight:800;font-si
 
   <section class="card">
     <h3>La boucle</h3>
-    <p class="loop-intro">Une boucle de 3,45 km au col de Cénise (Haute-Savoie), à répéter pendant 24 h. Objectif : 29 tours, soit 100 km.</p>
+    <p class="loop-intro">Une boucle de 3,45 km au col de Cénise, à répéter pendant 24 h. Objectif : 29 tours, soit 100 km.</p>
     <div class="loop-grid">
       <div><span class="label">Distance</span><span class="value mono">3,454 km</span></div>
       <div><span class="label">Dénivelé</span><span class="value mono">+127 / −127 m</span></div>
@@ -494,16 +489,19 @@ h1{margin:2px 0 0;font-family:'Big Shoulders',sans-serif;font-weight:800;font-si
   var profileDot = null;
   (function drawProfile(){
     var svg=document.getElementById('loop-profile'), ns='http://www.w3.org/2000/svg';
-    var W=320, H=110, padL=34, padR=6, padT=8, padB=18;
-    var lo=1670, hi=1780, n=PROFILE.length;
+    var W=320, H=110, padL=40, padR=6, padB=18, EXAG=3, n=PROFILE.length;
+    var lo=1675.7, hi=1774.0; // altitudes mini / maxi du GPX
+    var pxPerM = (W-padL-padR)/3454; // echelle horizontale, reprise en vertical (x EXAG)
+    var base = (H-padB)/2 + (hi-lo)*pxPerM*EXAG/2 + 4; // profil centre verticalement dans le cadre
     function X(i){ return padL + i/(n-1)*(W-padL-padR); }
-    function Y(e){ return padT + (hi-e)/(hi-lo)*(H-padT-padB); }
+    function Y(e){ return base - (e-lo)*pxPerM*EXAG; }
     var line=PROFILE.map(function(e,i){ return X(i).toFixed(1)+','+Y(e).toFixed(1); }).join(' ');
     function el(tag, attrs, text){ var e=document.createElementNS(ns,tag); for(var k in attrs){ if(k==='fill'||k==='stroke') e.style[k]=attrs[k]; else e.setAttribute(k,attrs[k]); } if(text) e.textContent=text; svg.appendChild(e); return e; }
-    [1680,1720,1760].forEach(function(a){
-      el('line',{x1:padL,x2:W-padR,y1:Y(a),y2:Y(a),stroke:'var(--line)','stroke-width':1});
-      el('text',{x:padL-4,y:Y(a)+3,'text-anchor':'end','font-size':9,fill:'var(--ink-dim)'},a+' m');
+    [lo,hi].forEach(function(a){
+      el('line',{x1:padL,x2:W-padR,y1:Y(a),y2:Y(a),stroke:'var(--line)','stroke-width':1,'stroke-dasharray':'3,3'});
+      el('text',{x:padL-4,y:Y(a)+3,'text-anchor':'end','font-size':9,fill:'var(--ink-dim)'},Math.round(a)+' m');
     });
+    el('text',{x:W-padR,y:12,'text-anchor':'end','font-size':9,fill:'var(--ink-dim)'},'relief ×'+EXAG);
     el('polygon',{points:X(0)+','+(H-padB)+' '+line+' '+X(n-1)+','+(H-padB),fill:'var(--accent)','fill-opacity':.15});
     el('polyline',{points:line,fill:'none',stroke:'var(--accent)','stroke-width':2,'stroke-linejoin':'round'});
     el('text',{x:padL,y:H-4,'font-size':9,fill:'var(--ink-dim)'},'départ');
@@ -543,7 +541,9 @@ h1{margin:2px 0 0;font-family:'Big Shoulders',sans-serif;font-weight:800;font-si
 
   function render(){
     var fin = !!(state && state.final);
-    document.getElementById('finish-banner').hidden = !fin;
+    document.getElementById('hero-card').classList.toggle('is-finish', fin);
+    document.getElementById('finish-flag').hidden = !fin;
+    document.getElementById('finish-sub').hidden = !fin;
     document.getElementById('replay-row').hidden = !fin;
     document.getElementById('map-title').textContent = fin ? 'Parcours de la course' : 'Position en direct';
     document.getElementById('laps-title').textContent = 'Tours effectués';
@@ -616,8 +616,7 @@ h1{margin:2px 0 0;font-family:'Big Shoulders',sans-serif;font-weight:800;font-si
     });
     if(s.final){
       var f=s.final, dur=f.end-s.startedAt, kmTot=hybridKm(s);
-      document.getElementById('finish-title').textContent = s.laps.length+' tour'+(s.laps.length>1?'s':'')+' · '+kmTot.toFixed(1)+' km';
-      document.getElementById('finish-sub').textContent = (f.name ? f.name+' · ' : '')+Math.round(s.laps.length*s.cfg.loopGainM)+' m D+ en '+fmtDur(dur);
+      document.getElementById('finish-sub').textContent = (f.name ? f.name+' · ' : '')+'bouclé en '+fmtDur(dur);
     }
 
     tickLive();
