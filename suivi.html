@@ -674,6 +674,37 @@ h1{margin:2px 0 0;font-family:'Big Shoulders',sans-serif;font-weight:800;font-si
   }
   setInterval(tickLive, 1000);
 
+  // Rejeu : la course etant finie, on connait les points avant ET apres chaque instant. On lisse la
+  // progression sur +/- 1 min (moyenne glissante sur une grille de 15 s) pour gommer les a-coups du
+  // GPS (rebond vers l'avant puis attente, trou de signal puis saut). La moyenne d'une suite qui ne
+  // descend jamais ne descend jamais non plus, et les extremites sont gardees : chaque tour part de
+  // 0 a son heure de depart et boucle a son heure exacte.
+  function smoothLap(prog, t0, t1){
+    var pts=[{t:t0, m:0}].concat(prog.filter(function(p){ return p.t>t0 && (!t1 || p.t<t1); }));
+    if(t1) pts.push({t:t1, m:ROUTE_M});
+    var tEnd=pts[pts.length-1].t, STEP=15000, HALF=6, grid=[];
+    if(tEnd<=t0) return pts;
+    for(var t=t0; t<tEnd; t+=STEP) grid.push({t:t, m:Math.min(ROUTE_M, progAt(pts, t))});
+    if(tEnd-grid[grid.length-1].t < STEP/2 && grid.length>1) grid.pop(); // pas de pas minuscule a la fin
+    grid.push({t:tEnd, m:pts[pts.length-1].m});
+    var n=grid.length, first=0, last=grid[n-1].m;
+    // moyenne sur +/- 90 s, en prolongeant avant le depart (0) et apres l'arrivee (valeur finale)
+    var out=grid.map(function(g, i){
+      var sum=0;
+      for(var j=i-HALF;j<=i+HALF;j++) sum += j<0 ? first : (j>=n ? last : grid[j].m);
+      return {t:g.t, m:sum/(2*HALF+1)};
+    });
+    // rampes sur 90 s pour retomber exactement sur 0 au depart et sur la valeur finale a l'arrivee :
+    // un ecart en fin de tour (tour tape un peu avant d'arriver, GPS en retard) est reparti au lieu
+    // de faire un saut ; les corrections sont croissantes, donc le point ne recule jamais
+    var cStart=first-out[0].m, cEnd=last-out[n-1].m;
+    for(var i=0;i<n;i++){
+      if(i<HALF) out[i].m += cStart*(1-i/HALF);
+      if(i>n-1-HALF) out[i].m += cEnd*(1-(n-1-i)/HALF);
+    }
+    return out;
+  }
+
   // Pas de course en cours : on affiche le resultat de la derniere course terminee ("photo finish").
   var finalToken=0;
   function loadLastRace(){
@@ -706,8 +737,11 @@ h1{margin:2px 0 0;font-family:'Big Shoulders',sans-serif;font-weight:800;font-si
           var from=anchors[i], to=i+1<anchors.length ? anchors[i+1] : Infinity;
           lapProgs.push(lapProgress(pts.filter(function(p){ return p.t>=from && p.t<to; }), from));
         }
+        var smooth = lapProgs.map(function(pr, i){
+          return smoothLap(pr, anchors[i], i+1<anchors.length ? anchors[i+1] : null);
+        });
         state = {cfg:cfg, startedAt:d.startedAt, laps:laps, legacyTrack:[], track:pts, prog:lapProgs[lapProgs.length-1],
-                 final:{end:end, name:d.name||'', lapProgs:lapProgs}};
+                 final:{end:end, name:d.name||'', lapProgs:smooth}};
         stopReplay();
         render();
       });
