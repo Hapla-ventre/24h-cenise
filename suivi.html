@@ -262,6 +262,7 @@ h1{margin:2px 0 0;font-family:'Big Shoulders',sans-serif;font-weight:800;font-si
     trackChunks={}; trackFor=id;
     if(!id) return;
     trackUnsub = sessionsRef.where('trackOf','==',id).onSnapshot(function(snap){
+      noteArrival(snap);
       snap.docChanges().forEach(function(ch){
         if(ch.type==='removed') delete trackChunks[ch.doc.id];
         else trackChunks[ch.doc.id]=ch.doc.data().pts||[];
@@ -307,11 +308,31 @@ h1{margin:2px 0 0;font-family:'Big Shoulders',sans-serif;font-weight:800;font-si
   // s'arrete toujours exactement sous le point. Les points Termux arrivent par paquets toutes les
   // ~10 s : on rejoue la progression avec 15 s de decalage, a vitesse reelle, pour que le point
   // glisse le long du chemin au lieu de sauter.
-  var PLAYBACK_DELAY_MS = 15000;
+  // Decalage de lecture adaptatif : les positions arrivent du serveur par paquets (~toutes les
+  // 10 s). A chaque arrivee on mesure l'age du point le plus recent (ce qui absorbe aussi un ecart
+  // d'horloge entre les deux telephones), et on rejoue juste assez en retard pour que le point
+  // avance en continu, sans attendre plus que necessaire.
+  var BATCH_EVERY_MS = 10000, arrivalLags = [];
+  function noteArrival(snap){
+    if(snap.metadata.fromCache) return;
+    var newest = 0;
+    snap.docChanges().forEach(function(ch){
+      if(ch.type==='removed') return;
+      (ch.doc.data().pts||[]).forEach(function(p){ if(p.t>newest) newest=p.t; });
+    });
+    if(!newest) return;
+    arrivalLags.push(Date.now()-newest);
+    if(arrivalLags.length>6) arrivalLags.shift();
+  }
+  function remotePlaybackDelay(){
+    if(!arrivalLags.length) return 15000;
+    var lag = Math.min.apply(null, arrivalLags);
+    return Math.max(-60000, Math.min(120000, lag + BATCH_EVERY_MS + 2000));
+  }
   function tickMap(){
     if(!raceMap || !state || document.hidden) return;
     if(!state.startedAt){ clearMap(); return; }
-    var m = progAt(state.prog||[], Date.now()-PLAYBACK_DELAY_MS);
+    var m = progAt(state.prog||[], Date.now()-remotePlaybackDelay());
     mapDoneLine.setLatLngs(routeSliceTo(m));
     mapMarker.setLatLng(routePointAt(m).ll);
   }

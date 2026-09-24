@@ -87,7 +87,6 @@ body{background:var(--bg);color:var(--ink);font-family:'IBM Plex Sans',system-ui
 .gps-age.is-stale{color:var(--danger);font-weight:600;}
 .sync-dot.is-ok{background:var(--good);}
 .sync-dot.is-pending{background:var(--danger);}
-.gps-toggle{margin-left:auto;display:flex;align-items:center;gap:6px;font-size:12px;}
 .action-buttons{display:flex;gap:8px;}
 .btn-primary{flex:1;background:var(--accent);color:var(--accent-ink);border:0;border-radius:14px;padding:16px;font-family:'Big Shoulders',sans-serif;font-weight:800;font-size:19px;letter-spacing:.03em;}
 .btn-secondary{flex:1;background:var(--surface);border:1px solid var(--line);color:var(--ink);border-radius:14px;padding:16px;font-family:'Big Shoulders',sans-serif;font-weight:700;font-size:17px;}
@@ -227,7 +226,6 @@ a.suivi-link{color:var(--accent);font-weight:600;}
       <span class="sync-dot is-pending" id="sync-dot"></span>
       <span id="sync-text">Connexion...</span>
       <span id="gps-age" class="gps-age"></span>
-      <label class="gps-toggle"><input type="checkbox" id="gps-toggle"> GPS auto (bêta)</label>
     </div>
     <div class="action-buttons">
       <button type="button" class="btn-secondary" id="btn-start" hidden>Démarrer la course</button>
@@ -403,6 +401,7 @@ a.suivi-link{color:var(--accent);font-weight:600;}
     trackUnsub = sessionsRef.where('trackOf','==',id).onSnapshot(function(snap){
       // un paquet de positions confirme par le serveur = le suivi l'a aussi
       if(!snap.metadata.fromCache && !docPending) syncedNow();
+      noteArrival(snap);
       snap.docChanges().forEach(function(ch){
         if(ch.type==='removed') delete trackChunks[ch.doc.id];
         else trackChunks[ch.doc.id]=ch.doc.data().pts||[];
@@ -498,8 +497,28 @@ a.suivi-link{color:var(--accent);font-weight:600;}
   // s'arrete toujours exactement sous le point. Les points Termux arrivent par paquets toutes les
   // ~10 s : on rejoue la progression avec 15 s de decalage, a vitesse reelle, pour que le point
   // glisse le long du chemin au lieu de sauter.
-  var PLAYBACK_DELAY_MS = 15000;
-  function playbackDelay(){ return termuxLocal && Date.now()-termuxLocal.t<6000 ? 6000 : PLAYBACK_DELAY_MS; }
+  // Decalage de lecture adaptatif : les positions arrivent du serveur par paquets (~toutes les
+  // 10 s). A chaque arrivee on mesure l'age du point le plus recent (ce qui absorbe aussi un ecart
+  // d'horloge entre les deux telephones), et on rejoue juste assez en retard pour que le point
+  // avance en continu, sans attendre plus que necessaire.
+  var BATCH_EVERY_MS = 10000, arrivalLags = [];
+  function noteArrival(snap){
+    if(snap.metadata.fromCache) return;
+    var newest = 0;
+    snap.docChanges().forEach(function(ch){
+      if(ch.type==='removed') return;
+      (ch.doc.data().pts||[]).forEach(function(p){ if(p.t>newest) newest=p.t; });
+    });
+    if(!newest) return;
+    arrivalLags.push(Date.now()-newest);
+    if(arrivalLags.length>6) arrivalLags.shift();
+  }
+  function remotePlaybackDelay(){
+    if(!arrivalLags.length) return 15000;
+    var lag = Math.min.apply(null, arrivalLags);
+    return Math.max(-60000, Math.min(120000, lag + BATCH_EVERY_MS + 2000));
+  }
+  function playbackDelay(){ return termuxLocal && Date.now()-termuxLocal.t<6000 ? 7000 : remotePlaybackDelay(); }
   var localFix = null; // position du telephone vue par le navigateur (ecran allume), en temps reel
   function tickMap(){
     if(!raceMap || !state || document.hidden || document.getElementById('panel-carte').hidden) return;
@@ -938,46 +957,21 @@ a.suivi-link{color:var(--accent);font-weight:600;}
     undoLap();
   });
 
-  // GPS du navigateur : sert quand l'ecran est allume, soit pour afficher ta position en temps
-  // reel sur la carte (onglet Carte ouvert), soit pour la detection auto "GPS auto (beta)".
-  // Termux reste la source en fond (ecran eteint).
-  var gpsWatchId=null, gpsArmed=false, gpsAutoLap=false;
-  try{ gpsAutoLap = localStorage.getItem('ck-gps-enabled')==='1'; }catch(e){}
-  document.getElementById('gps-toggle').checked = gpsAutoLap;
+  // GPS du navigateur : quand l'ecran est allume et l'onglet Carte ouvert, il donne ta position en
+  // temps reel sur la carte. Termux reste la source des positions enregistrees et des tours.
+  var gpsWatchId=null;
   function updateGeoWatch(){
     var mapOpen = !document.getElementById('panel-carte').hidden;
-    var want = !!currentSessionId && !document.hidden && (gpsAutoLap || mapOpen) && ('geolocation' in navigator);
+    var want = !!currentSessionId && !document.hidden && mapOpen && ('geolocation' in navigator);
     if(want && gpsWatchId==null){
-      gpsArmed=false;
-      gpsWatchId=navigator.geolocation.watchPosition(onGpsPos, onGpsErr, {enableHighAccuracy:true, maximumAge:0, timeout:20000});
+      gpsWatchId=navigator.geolocation.watchPosition(onGpsPos, function(){}, {enableHighAccuracy:true, maximumAge:0, timeout:20000});
     } else if(!want && gpsWatchId!=null){
       navigator.geolocation.clearWatch(gpsWatchId); gpsWatchId=null; localFix=null;
     }
   }
-  function setGpsEnabled(on){
-    try{ localStorage.setItem('ck-gps-enabled', on?'1':'0'); }catch(e){}
-    if(on && !('geolocation' in navigator)){ toast('GPS non disponible sur ce navigateur.'); document.getElementById('gps-toggle').checked=false; on=false; }
-    gpsAutoLap=on;
-    updateGeoWatch();
-  }
   function onGpsPos(pos){
     if(pos.coords.accuracy<=50) localFix={lat:pos.coords.latitude, lon:pos.coords.longitude, t:Date.now()};
-    if(!state || !gpsAutoLap || !state.startedAt) return;
-    var d=haversineM(pos.coords.latitude,pos.coords.longitude,TRACK[0][0],TRACK[0][1]);
-    var lastT = state.laps.length ? state.laps[state.laps.length-1].t : state.startedAt;
-    var sinceMs = Date.now()-(lastT||Date.now());
-    if(!gpsArmed && d>100) gpsArmed=true;
-    if(gpsArmed && d<30 && sinceMs>8*60*1000){ gpsArmed=false; confirmAutoLap(); }
   }
-  function onGpsErr(err){ if(gpsAutoLap) toast('GPS indisponible : '+err.message); }
-  function confirmAutoLap(){
-    var cancelled=false;
-    toast('Tour '+(state.laps.length+1)+' détecté par GPS', {
-      actionLabel:'Annuler', onAction:function(){ cancelled=true; }, durationMs:10000,
-      onExpire:function(){ if(!cancelled) addLap('gps'); }
-    });
-  }
-  document.getElementById('gps-toggle').addEventListener('change', function(e){ setGpsEnabled(e.target.checked); });
 
   // Le script est servi a cote de cette page : une seule source de verite, pas de copie a tenir a jour.
   var TERMUX_SETUP_CMD = [
@@ -1159,11 +1153,6 @@ a.suivi-link{color:var(--accent);font-weight:600;}
   try{
     var savedTab=sessionStorage.getItem('ck-active-tab');
     if(savedTab==='replay' || savedTab==='carte'){ document.querySelector('.tab[data-tab="'+savedTab+'"]').click(); }
-  }catch(e){}
-  try{
-    if(localStorage.getItem('ck-gps-enabled')==='1'){
-      document.getElementById('gps-toggle').checked=true; setGpsEnabled(true);
-    }
   }catch(e){}
 })();
 </script>
