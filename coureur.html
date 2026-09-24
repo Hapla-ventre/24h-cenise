@@ -400,6 +400,8 @@ a.suivi-link{color:var(--accent);font-weight:600;}
     if(trackUnsub){ trackUnsub(); trackUnsub=null; }
     if(trackFor!==id){ trackChunks={}; trackFor=id; }
     trackUnsub = sessionsRef.where('trackOf','==',id).onSnapshot(function(snap){
+      // un paquet de positions confirme par le serveur = le suivi l'a aussi
+      if(!snap.metadata.fromCache && !docPending) syncedNow();
       snap.docChanges().forEach(function(ch){
         if(ch.type==='removed') delete trackChunks[ch.doc.id];
         else trackChunks[ch.doc.id]=ch.doc.data().pts||[];
@@ -602,9 +604,10 @@ a.suivi-link{color:var(--accent);font-weight:600;}
       // terminee depuis un autre onglet ou un autre appareil : on la quitte ici aussi
       if(d.active===false && !doc.metadata.hasPendingWrites){ leaveSession(); toast('Cette sortie a été terminée.'); return; }
       state = stateFromDoc(d);
+      docPending = doc.metadata.hasPendingWrites || doc.metadata.fromCache;
       if(doc.metadata.hasPendingWrites) setSync('pending', 'En attente de réseau — rien n\'est perdu');
       else if(doc.metadata.fromCache) setSync('pending', 'Hors ligne — données locales');
-      else setSync('ok', 'Synchronisé '+new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit',second:'2-digit'}));
+      else syncedNow();
       saveLocalCache();
       render(state);
     }, function(){ setSync('pending', 'Hors ligne — en attente de réseau'); });
@@ -632,6 +635,10 @@ a.suivi-link{color:var(--accent);font-weight:600;}
     if(e.key==='ck-current-session-id' && (e.newValue||null)!==currentSessionId) location.reload();
   });
 
+  // "Synchronise HH:MM:SS" = derniere fois que le serveur (donc le suivi) a confirme recevoir
+  // quelque chose : un tour, le depart, ou un paquet de positions GPS envoye par Termux.
+  var docPending = false;
+  function syncedNow(){ setSync('ok', 'Synchronisé '+new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit',second:'2-digit'})); }
   function setSync(status, text){
     var dot=document.getElementById('sync-dot'), t=document.getElementById('sync-text');
     dot.className='sync-dot is-'+status;
