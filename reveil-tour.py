@@ -44,7 +44,6 @@ UPLOAD_EVERY_S = 10
 CHUNK_MS = 900000     # un document de trace par tranche de 15 min (moins de lectures pour chaque suiveur)
 SESSION_CHECK_S = 15
 PAGE_TRUST_S = 600    # la page coureur ouverte fait foi sur la sortie en cours pendant 10 min
-RESTART_STREAM_S = 25 # termux-location -r updates s'arrete seul apres 30 s : on relance avant
 STREAM_MAX_S = 45     # au-dela, un appel GPS est considere comme bloque et arrete
 
 
@@ -313,8 +312,9 @@ def send_lap(session_id, t_ms):
 
 
 # ---- flux GPS ----
-# Chaque "termux-location -r updates" vit 30 s ; on en lance un nouveau toutes les 25 s pour
-# que deux flux se chevauchent et qu'il n'y ait pas de trou. Les doublons sont filtres ensuite.
+# Chaque "termux-location -r updates" vit 30 s, puis on en relance un aussitot. Une seule demande a
+# la fois : des demandes qui se chevauchent ont deja bloque la localisation de Termux:API (plus
+# aucune position, meme en "once", jusqu'a un "Forcer l'arret" de Termux:API).
 
 def run_one_stream(out_q):
     try:
@@ -346,8 +346,10 @@ def run_one_stream(out_q):
 
 def location_streams(out_q):
     while True:
-        threading.Thread(target=run_one_stream, args=(out_q,), daemon=True).start()
-        time.sleep(RESTART_STREAM_S)
+        t0 = time.time()
+        run_one_stream(out_q)          # bloque ~30 s (45 s au plus), puis on relance
+        if time.time() - t0 < 3:
+            time.sleep(3)              # erreur immediate (Termux:API absent...) : pas de boucle folle
 
 
 # ---- envois vers Firestore, dans leur propre fil ----
@@ -504,7 +506,8 @@ def main(stream=location_streams):
             silent = now - last_fix_t
             if silent > 90 and not gps_silent_logged:
                 gps_silent_logged = True
-                log("ATTENTION : plus de position GPS depuis", int(silent), "s (localisation mise en pause par Android ?)")
+                log("ATTENTION : plus de position GPS depuis", int(silent), "s.")
+                log("  Dehors et ca dure ? Reglages Android > Applis > Termux:API > Forcer l'arret (le script continue).")
             elif silent <= 90 and gps_silent_logged:
                 gps_silent_logged = False
                 log("GPS revenu")

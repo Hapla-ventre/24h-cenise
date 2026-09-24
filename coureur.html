@@ -914,6 +914,8 @@ a.suivi-link{color:var(--accent);font-weight:600;}
       var age = now-lastPt.t;
       txt = '· GPS il y a '+(age<60000 ? Math.round(age/1000)+' s' : fmtDur(age));
       stale = age>60000;
+      // GPS muet alors que Termux tourne : le remede qui a marche (Termux:API bloque)
+      if(LOCAL_API && s.startedAt && age>120000) txt += ' — dehors et ça dure ? Réglages → Applis → Termux:API → Forcer l\'arrêt';
     }
     if(LOCAL_API && termuxLocal && now-termuxLocal.t<=6000 && (termuxLocal.pendingPts>0 || termuxLocal.pendingLaps>0) && !termuxLocal.online){
       txt += ' · '+termuxLocal.pendingPts+' positions'+(termuxLocal.pendingLaps ? ' et '+termuxLocal.pendingLaps+' tour(s)' : '')+' en attente de réseau';
