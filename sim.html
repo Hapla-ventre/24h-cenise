@@ -1,0 +1,323 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Simulateur GPS</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders:wght@600;700;800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="vendor/leaflet.css">
+<style>
+:root{
+  --bg:#F5F3EC; --surface:#FFFFFF; --surface-2:#EDEAE0; --ink:#1C2321; --ink-dim:#5B6660;
+  --accent:#E1531F; --line:#DDD8C9; --good:#2F8F5B; --danger:#C23B22;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#11171A; --surface:#1A2224; --surface-2:#202B2D; --ink:#EDEDE6; --ink-dim:#93A19B;
+    --accent:#FF7A45; --line:#2A3538; --good:#4CBE82; --danger:#FF6B57;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#11171A; --surface:#1A2224; --surface-2:#202B2D; --ink:#EDEDE6; --ink-dim:#93A19B;
+  --accent:#FF7A45; --line:#2A3538; --good:#4CBE82; --danger:#FF6B57;
+}
+*{box-sizing:border-box;}
+html,body{margin:0;}
+body{background:var(--bg);color:var(--ink);font-family:'IBM Plex Sans',system-ui,sans-serif;}
+.mono{font-family:'IBM Plex Mono',ui-monospace,monospace;font-variant-numeric:tabular-nums;}
+#app{max-width:720px;margin:0 auto;padding:16px 16px 32px;display:flex;flex-direction:column;gap:12px;}
+.eyebrow{font-size:12px;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-dim);}
+.eyebrow a{color:inherit;}
+h1{margin:2px 0 0;font-family:'Big Shoulders',sans-serif;font-weight:800;font-size:26px;line-height:1;}
+.fine{font-size:13px;color:var(--ink-dim);margin:0;line-height:1.45;}
+#map{width:100%;height:55vh;min-height:320px;border-radius:14px;border:1px solid var(--line);}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;}
+button,select{font:inherit;font-size:14px;padding:8px 12px;border-radius:10px;border:1px solid var(--line);background:var(--surface);color:var(--ink);cursor:pointer;}
+button.on{background:var(--accent);border-color:var(--accent);color:#fff;}
+label{font-size:13px;color:var(--ink-dim);display:flex;gap:6px;align-items:center;}
+input[type=range]{flex:1;min-width:160px;accent-color:var(--accent);}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;}
+@media (max-width:520px){ .stats{grid-template-columns:repeat(2,1fr);} }
+.tile{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px;display:flex;flex-direction:column;gap:2px;}
+.tile .l{font-size:11px;color:var(--ink-dim);text-transform:uppercase;letter-spacing:.05em;}
+.tile .v{font-size:18px;font-weight:500;}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px;}
+.card h3{margin:0 0 6px;font-family:'Big Shoulders',sans-serif;font-size:15px;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-dim);}
+.legend span{display:inline-flex;align-items:center;gap:5px;margin-right:12px;font-size:12px;color:var(--ink-dim);}
+.dot{width:10px;height:10px;border-radius:50%;display:inline-block;}
+.log{max-height:220px;overflow:auto;font-size:12px;}
+.log div{padding:3px 0;border-bottom:1px solid var(--line);}
+.bad{color:var(--danger);}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="eyebrow">Col de Cénise · <a href="coureur.html">appli coureur</a></div>
+    <h1>Simulateur GPS</h1>
+  </header>
+  <p class="fine">Touche la carte pour poser des points GPS, comme s'ils venaient de Termux. Le calcul est <b>celui de l'appli coureur</b> (recalage sur le chemin, points écartés), et les tours sont détectés comme dans Termux (moins de 30 m du départ). Rien n'est enregistré ni envoyé.</p>
+
+  <div id="map"></div>
+
+  <div class="legend">
+    <span><i class="dot" style="background:#5B6660"></i>point GPS gardé</span>
+    <span><i class="dot" style="background:#C23B22"></i>point écarté</span>
+    <span><i class="dot" style="background:#E1531F"></i>position recalée + progression</span>
+  </div>
+
+  <div class="row">
+    <label>Entre deux points
+      <select id="dt">
+        <option value="v5">ta vitesse : marche 5 km/h</option>
+        <option value="v8" selected>ta vitesse : trot 8 km/h</option>
+        <option value="v12">ta vitesse : course 12 km/h</option>
+        <option value="5">toujours 5 s (tester les rebonds GPS)</option>
+        <option value="30">toujours 30 s</option>
+      </select>
+    </label>
+    <button type="button" id="gap">Trou de signal : +2 min au prochain point</button>
+    <button type="button" id="undo">Annuler le dernier point</button>
+    <button type="button" id="clear">Tout effacer</button>
+  </div>
+
+  <div class="row">
+    <select id="sessions"><option value="">Charger une vraie sortie…</option></select>
+    <button type="button" id="load">Charger</button>
+    <span class="fine" id="load-status"></span>
+  </div>
+
+  <div class="row">
+    <button type="button" id="play">▶ Rejouer</button>
+    <input type="range" id="time" min="0" max="0" value="0" step="1000">
+    <span class="mono" id="time-label">--</span>
+  </div>
+
+  <div class="stats">
+    <div class="tile"><span class="l">Tours</span><span class="v mono" id="s-laps">0</span></div>
+    <div class="tile"><span class="l">Distance</span><span class="v mono" id="s-km">0.00 km</span></div>
+    <div class="tile"><span class="l">Tour en cours</span><span class="v mono" id="s-cur">0 m</span></div>
+    <div class="tile"><span class="l">Points gardés</span><span class="v mono" id="s-pts">0 / 0</span></div>
+  </div>
+
+  <div class="card">
+    <h3>Tours détectés</h3>
+    <div id="laps" class="log"><div class="fine">Aucun pour l'instant : fais le tour et repasse à moins de 30 m du départ.</div></div>
+  </div>
+
+  <div class="card">
+    <h3>Journal des points</h3>
+    <div id="log" class="log"></div>
+  </div>
+</div>
+
+<script src="vendor/firebase-app-compat.js"></script>
+<script src="vendor/firebase-firestore-compat.js"></script>
+<script src="vendor/leaflet.js"></script>
+<script>
+(async function(){
+  // Le calcul vient directement de coureur.html : ce qu'on voit ici est ce que fera l'appli.
+  var src = await (await fetch('coureur.html', {cache:'no-store'})).text();
+  var code = src.slice(src.indexOf('var TRACK = '), src.indexOf('  // Un meme passage'));
+  var R = new Function(code + '; return {TRACK:TRACK, ROUTE_M:ROUTE_M, haversineM:haversineM, snapForward:snapForward, advance:advance, routePointAt:routePointAt, routeSliceTo:routeSliceTo, progAt:progAt, SNAP_MAX_OFF_M:SNAP_MAX_OFF_M};')();
+  var LOOP_KM = 3.454;
+
+  // Memes reglages que reveil-tour.py (Termux)
+  var T = {FAR_M:100, ENTER_M:30, CAPTURE_M:80, MOVE_AWAY_M:20, MIN_LAP_MS:480000, MAX_SPEED_MS:7};
+  var START = R.TRACK[0];
+
+  var pts = [];          // points poses : {t, lat, lon}
+  var analysis = null;   // resultat du calcul sur tous les points
+  var curT = 0, follow = true, gapNext = false;
+  var startedAt = null;  // heure du "Demarrer la course" simule
+
+  // ---- carte ----
+  var map = L.map('map', {preferCanvas:true, zoomControl:true});
+  L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
+    maxZoom:17, attribution:'&copy; OpenStreetMap contributors, SRTM | &copy; OpenTopoMap (CC-BY-SA)'
+  }).addTo(map);
+  L.tileLayer('tiles/{z}/{x}/{y}.png', {minZoom:12, maxZoom:17, bounds:L.latLngBounds([[46.0056,6.4350],[46.0225,6.4532]])}).addTo(map);
+  L.polyline(R.TRACK, {color:'#5B6660', weight:3, dashArray:'6,6', opacity:.7}).addTo(map);
+  L.circleMarker(START, {radius:6, color:'#2F8F5B', weight:2, fillColor:'#fff', fillOpacity:1}).addTo(map).bindTooltip('Départ');
+  L.circle(START, {radius:T.ENTER_M, color:'#2F8F5B', weight:1, fillOpacity:.08}).addTo(map);
+  map.fitBounds(L.latLngBounds(R.TRACK), {padding:[16,16], maxZoom:15});
+  setTimeout(function(){ map.invalidateSize(); map.fitBounds(L.latLngBounds(R.TRACK), {padding:[16,16], maxZoom:15}); }, 100);
+  var layer = L.layerGroup().addTo(map);
+  var progLine = L.polyline([], {color:'#E1531F', weight:5}).addTo(map);
+  var marker = L.circleMarker(START, {radius:8, color:'#fff', weight:2, fillColor:'#E1531F', fillOpacity:1}).addTo(map);
+
+  map.on('click', function(e){
+    var last = pts[pts.length-1], mode = document.getElementById('dt').value, dt;
+    // "ta vitesse" : le temps entre deux points depend de la distance entre tes deux clics
+    if(mode[0]==='v') dt = last ? Math.max(2000, R.haversineM(last.lat,last.lon,e.latlng.lat,e.latlng.lng)/(parseInt(mode.slice(1),10)/3.6)*1000) : 5000;
+    else dt = parseInt(mode,10)*1000;
+    dt = Math.round(dt);
+    var t = last ? last.t + dt + (gapNext ? 120000 : 0) : Date.now();
+    if(!last) startedAt = t - dt; // la course demarre un intervalle avant le premier point, comme dans l'appli
+    if(gapNext){ gapNext=false; document.getElementById('gap').classList.remove('on'); }
+    pts.push({t:t, lat:e.latlng.lat, lon:e.latlng.lng});
+    follow = true;
+    recompute();
+  });
+
+  // ---- calcul ----
+  function recompute(){
+    var n = pts.length, i;
+    // 1) filtre de Termux : saut impossible (> ~25 km/h) = rebond GPS
+    var status = new Array(n), kept = [], lastGood = null;
+    for(i=0;i<n;i++){
+      var p = pts[i];
+      if(lastGood){
+        var sp = R.haversineM(lastGood.lat,lastGood.lon,p.lat,p.lon) / Math.max((p.t-lastGood.t)/1000, 1);
+        if(sp > T.MAX_SPEED_MS){ status[i] = {ok:false, why:'rebond GPS écarté par Termux ('+(sp*3.6).toFixed(0)+' km/h)'}; continue; }
+      }
+      lastGood = p; kept.push(i);
+    }
+    // 2) detection des tours, comme Termux
+    var laps = [], armed=false, minD=null, minT=null, lastLap=0;
+    kept.forEach(function(k){
+      var p = pts[k], d = R.haversineM(p.lat,p.lon,START[0],START[1]);
+      if(!armed && d>T.FAR_M){ armed=true; minD=null; }
+      if(!armed) return;
+      if(minD===null || d<minD){ minD=d; minT=p.t; }
+      var lt = d<=T.ENTER_M ? p.t : (minD<=T.CAPTURE_M && d>minD+T.MOVE_AWAY_M ? minT : null);
+      if(lt!==null && lt-lastLap>T.MIN_LAP_MS){ armed=false; minD=null; lastLap=lt; laps.push(lt); }
+    });
+    // 3) progression le long du chemin, tour par tour, exactement comme l'appli
+    var t0 = n ? Math.min(startedAt || pts[0].t, pts[0].t) : 0, anchors = [t0].concat(laps), m=0, mT=t0, a=0;
+    kept.forEach(function(k){
+      var p = pts[k];
+      while(a+1<anchors.length && p.t>=anchors[a+1]){ a++; m=0; mT=anchors[a]; }
+      var nm = R.advance(m, mT, p.lat, p.lon, p.t);
+      if(nm===null){
+        var s = R.snapForward(p.lat, p.lon, m);
+        status[k] = {ok:false, why: (!s || s.d>R.SNAP_MAX_OFF_M) ? 'à plus de '+R.SNAP_MAX_OFF_M+' m du chemin' : 'avance impossible à pied depuis le point précédent'};
+        return;
+      }
+      m=nm; mT=p.t;
+      status[k] = {ok:true, lap:a, m:m};
+    });
+    analysis = {status:status, laps:laps, t0:t0};
+    var slider = document.getElementById('time');
+    slider.min = n ? pts[0].t : 0; slider.max = n ? pts[n-1].t : 0;
+    if(follow) curT = n ? pts[n-1].t : 0;
+    slider.value = curT;
+    renderLog();
+    renderAt(curT);
+  }
+
+  // ---- affichage a l'instant T ----
+  function renderAt(Tm){
+    layer.clearLayers();
+    var st = analysis ? analysis.status : [], laps = analysis ? analysis.laps : [];
+    var lapsDone = laps.filter(function(t){ return t<=Tm; }).length;
+    var prog = [], raw = [], keptN = 0, shownN = 0;
+    var many = pts.length > 1500;
+    for(var i=0;i<pts.length;i++){
+      var p = pts[i];
+      if(p.t>Tm) break;
+      shownN++;
+      raw.push([p.lat,p.lon]);
+      var s = st[i] || {ok:false};
+      if(s.ok){
+        keptN++;
+        if(s.lap===lapsDone) prog.push({t:p.t, m:s.m});
+        if(!many){
+          // trait fin entre le point GPS et l'endroit ou il est ramene sur le chemin
+          L.polyline([[p.lat,p.lon], R.routePointAt(s.m).ll], {color:'#E1531F', weight:1, opacity:.5}).addTo(layer);
+          L.circleMarker([p.lat,p.lon], {radius:4, color:'#5B6660', weight:1, fillColor:'#5B6660', fillOpacity:.9}).addTo(layer);
+        }
+      } else {
+        L.circleMarker([p.lat,p.lon], {radius:5, color:'#C23B22', weight:2, fillColor:'#C23B22', fillOpacity:.5}).addTo(layer).bindTooltip(s.why||'');
+      }
+    }
+    if(raw.length>1) L.polyline(raw, {color:'#5B6660', weight:1.5, opacity:.6}).addTo(layer);
+    var m = prog.length ? R.progAt(prog, Tm) : 0;
+    progLine.setLatLngs(pts.length ? R.routeSliceTo(m) : []);
+    marker.setLatLng(R.routePointAt(m).ll);
+    document.getElementById('s-laps').textContent = lapsDone;
+    document.getElementById('s-km').textContent = (lapsDone*LOOP_KM + Math.min(m/R.ROUTE_M,0.99)*LOOP_KM).toFixed(2)+' km';
+    document.getElementById('s-cur').textContent = Math.round(m)+' m';
+    document.getElementById('s-pts').textContent = keptN+' / '+shownN;
+    document.getElementById('time-label').textContent = pts.length ? fmtRel(Tm-analysis.t0) : '--';
+  }
+
+  function fmtRel(ms){
+    var s=Math.round(ms/1000), h=Math.floor(s/3600), mi=Math.floor(s%3600/60), se=s%60;
+    return (h? h+'h':'')+String(mi).padStart(2,'0')+'min'+String(se).padStart(2,'0')+'s';
+  }
+  function renderLog(){
+    var st = analysis.status, box = document.getElementById('log'), html = [];
+    for(var i=pts.length-1;i>=0 && html.length<300;i--){
+      var s = st[i] || {};
+      html.push('<div class="mono'+(s.ok?'':' bad')+'">#'+(i+1)+' · '+fmtRel(pts[i].t-analysis.t0)+' · '+(s.ok ? 'tour '+(s.lap+1)+', '+Math.round(s.m)+' m sur le chemin' : s.why)+'</div>');
+    }
+    box.innerHTML = html.join('');
+    var lb = document.getElementById('laps');
+    lb.innerHTML = analysis.laps.length ? analysis.laps.map(function(t,k){
+      var prev = k ? analysis.laps[k-1] : analysis.t0;
+      return '<div class="mono">Tour '+(k+1)+' · à '+fmtRel(t-analysis.t0)+' · durée '+fmtRel(t-prev)+'</div>';
+    }).join('') : '<div class="fine">Aucun pour l\'instant : fais le tour et repasse à moins de 30 m du départ.</div>';
+  }
+
+  // ---- commandes ----
+  document.getElementById('time').addEventListener('input', function(){
+    curT = parseInt(this.value,10); follow = curT>=parseInt(this.max,10); renderAt(curT);
+  });
+  document.getElementById('gap').addEventListener('click', function(){ gapNext=!gapNext; this.classList.toggle('on', gapNext); });
+  document.getElementById('undo').addEventListener('click', function(){ pts.pop(); if(!pts.length) startedAt=null; follow=true; recompute(); });
+  document.getElementById('clear').addEventListener('click', function(){ pts=[]; startedAt=null; follow=true; recompute(); });
+
+  var playing = null;
+  document.getElementById('play').addEventListener('click', function(){
+    var btn=this;
+    if(playing){ cancelAnimationFrame(playing); playing=null; btn.textContent='▶ Rejouer'; return; }
+    if(pts.length<2) return;
+    var t0=pts[0].t, t1=pts[pts.length-1].t, dur=Math.min(30000, Math.max(6000,(t1-t0)/20));
+    var from = curT>=t1 ? t0 : curT, start=performance.now();
+    btn.textContent='⏸ Pause';
+    (function frame(now){
+      curT = Math.min(t1, from + (now-start)/dur*(t1-t0));
+      follow = curT>=t1;
+      document.getElementById('time').value=curT; renderAt(curT);
+      if(curT<t1) playing=requestAnimationFrame(frame); else { playing=null; btn.textContent='▶ Rejouer'; }
+    })(start);
+  });
+
+  // ---- vraies sorties (lecture seule) ----
+  firebase.initializeApp({
+    apiKey: "AIzaSyAgayUPOrqdbUndNDegdTzgin8I9QNk8iQ",
+    authDomain: "mes-randonnees-314e9.firebaseapp.com",
+    projectId: "mes-randonnees-314e9",
+    storageBucket: "mes-randonnees-314e9.firebasestorage.app",
+    messagingSenderId: "513478282263",
+    appId: "1:513478282263:web:1f079b87e55a99192fe052"
+  });
+  var sessionsRef = firebase.firestore().collection('race_sessions');
+  sessionsRef.orderBy('createdAt','desc').limit(15).get().then(function(snap){
+    var sel=document.getElementById('sessions');
+    snap.forEach(function(doc){
+      var o=document.createElement('option'); o.value=doc.id; o.textContent=doc.data().name||doc.id; sel.appendChild(o);
+    });
+  }).catch(function(){ document.getElementById('load-status').textContent='Pas de réseau : chargement des sorties indisponible.'; });
+  document.getElementById('load').addEventListener('click', function(){
+    var id=document.getElementById('sessions').value, status=document.getElementById('load-status');
+    if(!id) return;
+    status.textContent='Chargement…';
+    Promise.all([sessionsRef.doc(id).get(), sessionsRef.where('trackOf','==',id).get()]).then(function(res){
+      var d=res[0].data()||{}, all=(d.track||[]).slice();
+      res[1].forEach(function(c){ Array.prototype.push.apply(all, c.data().pts||[]); });
+      all.sort(function(a,b){ return a.t-b.t; });
+      if(d.startedAt) all = all.filter(function(p){ return p.t>=d.startedAt; });
+      startedAt = d.startedAt || null;
+      pts = all.map(function(p){ return {t:p.t, lat:p.lat, lon:p.lon}; });
+      follow=true; recompute();
+      status.textContent = pts.length+' points chargés'+((d.laps||[]).length ? ' · tours enregistrés ce jour-là : '+d.laps.length : '')+'.';
+    }).catch(function(){ status.textContent='Impossible de charger (réseau ?).'; });
+  });
+
+  recompute();
+})();
+</script>
+</body>
+</html>
