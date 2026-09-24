@@ -84,6 +84,7 @@ body{background:var(--bg);color:var(--ink);font-family:'IBM Plex Sans',system-ui
 .action-bar{position:sticky;bottom:0;left:0;right:0;background:var(--bg);border-top:1px solid var(--line);padding:10px 0 calc(10px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;gap:8px;margin:0 -16px;padding-left:16px;padding-right:16px;}
 .sync-row{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--ink-dim);}
 .sync-dot{width:8px;height:8px;border-radius:50%;background:var(--ink-dim);flex-shrink:0;}
+.gps-age.is-stale{color:var(--danger);font-weight:600;}
 .sync-dot.is-ok{background:var(--good);}
 .sync-dot.is-pending{background:var(--danger);}
 .gps-toggle{margin-left:auto;display:flex;align-items:center;gap:6px;font-size:12px;}
@@ -157,7 +158,7 @@ a.suivi-link{color:var(--accent);font-weight:600;}
 
       <section class="tab-panel" id="panel-carte" hidden>
         <div class="replay-block">
-          <p class="fine-print">Tracé officiel de la boucle en pointillés, ton parcours réel en orange (mis à jour toutes les 20s via Termux).</p>
+          <p class="fine-print">Tracé officiel de la boucle en pointillés, ta progression en orange, recalée sur le chemin (chaque position GPS est ramenée au point le plus proche du tracé : pas de distance fantôme ni de raccourci à travers champ après une perte de signal). Rejouée avec ~15 s de décalage ; écran allumé, le point suit ta position en temps réel via le GPS du téléphone.</p>
           <div id="race-map" style="width:100%;height:320px;border-radius:14px;"></div>
         </div>
       </section>
@@ -210,7 +211,7 @@ a.suivi-link{color:var(--accent);font-weight:600;}
 
     <section class="replay-block" id="setup-card">
       <h3>Tours automatiques en fond (Termux)</h3>
-      <p class="fine-print">Installe Termux + Termux:API (F-Droid), ouvre Termux, puis colle cette commande en une fois : elle installe ce qu'il faut, écrit le script et le lance. Il tourne en silence (aucune vibration, aucun son) et enregistre directement le tour dans l'appli quand tu repasses au départ, même écran éteint — mais seulement pendant qu'une sortie est active. Il envoie aussi ta position GPS toutes les 20s pendant ce temps, pour afficher le tracé réel sur la carte (rien n'est envoyé quand aucune sortie n'est active). Vérifie de temps en temps l'historique pour repérer un faux positif GPS (tu peux annuler le dernier tour). Une seule fois, pas besoin de recommencer chaque course — mais si tu l'avais déjà installé avant cette mise à jour, recolle la commande (détection de passage plus fiable : basée sur le point le plus proche du départ observé, pas sur un point qui doit tomber pile dans un petit cercle).</p>
+      <p class="fine-print">Installe Termux + Termux:API (F-Droid). Dans les réglages Android : Termux:API → Autorisations → Position → <b>Toujours autoriser</b>, et Termux + Termux:API → Batterie → <b>Sans restriction</b>. Ouvre Termux, colle cette commande en une fois : elle installe ce qu'il faut, télécharge la dernière version du script et le lance. Il tourne en silence, même écran éteint, mais seulement pendant qu'une sortie est active : il envoie ta position GPS en continu (un point toutes les ~5 s, par paquets toutes les 10 s) et compte le tour dès que tu passes à moins de 30 m du départ. Si tu as déjà tapé le tour à la main, il ne le recompte pas (et inversement). À recoller après chaque mise à jour de l'appli.</p>
       <div class="replay-controls">
         <button type="button" id="btn-copy-setup">Copier la commande d'installation</button>
       </div>
@@ -223,6 +224,7 @@ a.suivi-link{color:var(--accent);font-weight:600;}
     <div class="sync-row">
       <span class="sync-dot is-pending" id="sync-dot"></span>
       <span id="sync-text">Connexion...</span>
+      <span id="gps-age" class="gps-age"></span>
       <label class="gps-toggle"><input type="checkbox" id="gps-toggle"> GPS auto (bêta)</label>
     </div>
     <div class="action-buttons">
@@ -254,7 +256,7 @@ a.suivi-link{color:var(--accent);font-weight:600;}
   var sessionsRef = db.collection('race_sessions');
   var DEFAULT_CFG = {targetLaps:29,targetKm:100,loopKm:3.454,loopGainM:127,raceDurationH:24};
 
-  var TRACK = [[46.019485,6.449133],[46.019457,6.449063],[46.018744,6.448989],[46.01671,6.44905],[46.016173,6.449107],[46.01531,6.449329],[46.01438,6.449471],[46.014323,6.44946],[46.013802,6.448824],[46.013092,6.448316],[46.012453,6.447947],[46.011994,6.447806],[46.011856,6.447808],[46.010469,6.448008],[46.010184,6.448327],[46.009618,6.448753],[46.009026,6.449381],[46.008923,6.449406],[46.008856,6.448886],[46.008924,6.447992],[46.008914,6.447954],[46.008799,6.448001],[46.008683,6.448176],[46.008899,6.447585],[46.009074,6.446899],[46.009269,6.446526],[46.009402,6.445981],[46.009856,6.445073],[46.009934,6.444279],[46.009879,6.443558],[46.010043,6.440977],[46.010522,6.439406],[46.010683,6.439131],[46.01085,6.439051],[46.011152,6.439218],[46.011453,6.439496],[46.012142,6.43997],[46.014079,6.441614],[46.014294,6.441697],[46.014362,6.441685],[46.014404,6.441613],[46.014862,6.442043],[46.014986,6.442258],[46.015226,6.443358],[46.015561,6.443663],[46.016291,6.444487],[46.016582,6.445148],[46.018201,6.447591],[46.018996,6.448543],[46.019354,6.448888],[46.019484,6.44913]];
+  var TRACK = [[46.019485,6.449133],[46.01947,6.449099],[46.019457,6.449063],[46.019175,6.449044],[46.0191,6.449036],[46.018963,6.449023],[46.018744,6.448989],[46.018479,6.448989],[46.018261,6.448993],[46.018082,6.448992],[46.017908,6.449],[46.017658,6.449023],[46.017444,6.449031],[46.017221,6.449035],[46.016991,6.449042],[46.01671,6.44905],[46.01656,6.449063],[46.016365,6.449076],[46.016173,6.449107],[46.015939,6.449162],[46.015545,6.449238],[46.01549,6.449253],[46.015443,6.449301],[46.01531,6.449329],[46.015192,6.449352],[46.01497,6.449381],[46.014821,6.449393],[46.014699,6.449404],[46.014565,6.449452],[46.014442,6.449471],[46.01438,6.449471],[46.014323,6.44946],[46.014247,6.449373],[46.014011,6.44909],[46.013876,6.448895],[46.013802,6.448824],[46.01361,6.44869],[46.013436,6.448571],[46.013258,6.448426],[46.013092,6.448316],[46.012902,6.448198],[46.012669,6.448065],[46.012453,6.447947],[46.012302,6.447896],[46.012133,6.447848],[46.011994,6.447806],[46.011856,6.447808],[46.011619,6.44786],[46.011442,6.447882],[46.011285,6.447908],[46.011113,6.447922],[46.011003,6.447946],[46.010883,6.447946],[46.010808,6.447949],[46.010767,6.447967],[46.010592,6.447967],[46.010527,6.447977],[46.010469,6.448008],[46.010374,6.448077],[46.010303,6.448154],[46.010258,6.448222],[46.010213,6.448295],[46.010184,6.448327],[46.010136,6.448354],[46.010054,6.44844],[46.009977,6.44848],[46.009936,6.448519],[46.009866,6.448551],[46.009805,6.448598],[46.00971,6.448684],[46.009618,6.448753],[46.009572,6.448816],[46.0095,6.448905],[46.009365,6.449026],[46.009216,6.449166],[46.009214,6.449169],[46.009064,6.449333],[46.009026,6.449381],[46.008997,6.449404],[46.008948,6.449421],[46.008923,6.449406],[46.008917,6.449312],[46.008888,6.449196],[46.008869,6.44909],[46.008858,6.448999],[46.008856,6.448886],[46.00887,6.44871],[46.00889,6.448522],[46.008901,6.44829],[46.008912,6.448118],[46.008926,6.448034],[46.008924,6.447992],[46.008914,6.447954],[46.00883,6.44798],[46.008813,6.447993],[46.008799,6.448001],[46.008792,6.448029],[46.008757,6.44807],[46.008727,6.448115],[46.008683,6.448176],[46.008698,6.448126],[46.00874,6.448038],[46.008758,6.447996],[46.008774,6.447958],[46.008784,6.447929],[46.008786,6.447906],[46.008831,6.447796],[46.008843,6.447738],[46.008876,6.447643],[46.008899,6.447585],[46.008942,6.44743],[46.008963,6.447344],[46.00901,6.447188],[46.009018,6.447122],[46.009043,6.446994],[46.009065,6.44694],[46.009074,6.446899],[46.0091,6.446849],[46.009129,6.446816],[46.0092,6.446685],[46.009241,6.446599],[46.009269,6.446526],[46.00929,6.446412],[46.009321,6.446277],[46.009353,6.446131],[46.009402,6.445981],[46.009452,6.445882],[46.009489,6.445821],[46.009552,6.445737],[46.009596,6.445624],[46.009655,6.445482],[46.009679,6.445445],[46.009699,6.445398],[46.009734,6.445339],[46.009758,6.445289],[46.009765,6.445248],[46.00978,6.445214],[46.009819,6.445157],[46.009836,6.445136],[46.009856,6.445073],[46.009867,6.445026],[46.009871,6.444896],[46.009874,6.444627],[46.00989,6.444565],[46.009893,6.444513],[46.00992,6.444444],[46.009925,6.444359],[46.009934,6.444279],[46.009929,6.444227],[46.00991,6.444141],[46.009908,6.444065],[46.009913,6.444015],[46.009893,6.443923],[46.009881,6.443828],[46.009879,6.443715],[46.009879,6.443558],[46.009892,6.443412],[46.009913,6.443247],[46.00992,6.4432],[46.00992,6.443117],[46.00992,6.443086],[46.009926,6.443041],[46.009924,6.44295],[46.009946,6.442761],[46.00996,6.442662],[46.009973,6.442389],[46.00999,6.442161],[46.010007,6.442005],[46.010009,6.441983],[46.010015,6.44184],[46.010013,6.44178],[46.010014,6.441504],[46.010025,6.441262],[46.01004,6.441126],[46.010043,6.440977],[46.010068,6.440858],[46.010112,6.44072],[46.010175,6.440583],[46.010205,6.440526],[46.010223,6.440469],[46.010244,6.4404],[46.010293,6.440239],[46.010334,6.440042],[46.010362,6.43992],[46.010387,6.439758],[46.010412,6.439705],[46.010463,6.439579],[46.010522,6.439406],[46.0106,6.439243],[46.010683,6.439131],[46.010708,6.439113],[46.010741,6.439101],[46.010772,6.439096],[46.0108,6.439081],[46.01085,6.439051],[46.010938,6.439085],[46.01101,6.439123],[46.011152,6.439218],[46.011279,6.439319],[46.011368,6.439408],[46.011453,6.439496],[46.011534,6.439553],[46.011622,6.439606],[46.011714,6.439669],[46.01179,6.439728],[46.011883,6.439797],[46.011973,6.439863],[46.012142,6.43997],[46.012238,6.440047],[46.012312,6.440115],[46.012392,6.440185],[46.012469,6.440243],[46.012517,6.440278],[46.012548,6.4403],[46.012646,6.44039],[46.012741,6.440478],[46.012853,6.440569],[46.012963,6.440653],[46.013057,6.440729],[46.013085,6.440758],[46.013187,6.44086],[46.013292,6.440958],[46.013555,6.441177],[46.013817,6.441396],[46.014079,6.441614],[46.014294,6.441697],[46.014362,6.441685],[46.014404,6.441613],[46.014663,6.441836],[46.014773,6.441945],[46.014862,6.442043],[46.014916,6.442109],[46.014957,6.442188],[46.014986,6.442258],[46.01501,6.442358],[46.015031,6.442474],[46.015042,6.442568],[46.015056,6.442638],[46.015076,6.442706],[46.015125,6.442832],[46.015143,6.442888],[46.015152,6.44294],[46.015171,6.443149],[46.015183,6.443237],[46.015196,6.443295],[46.015212,6.443333],[46.015226,6.443358],[46.015248,6.443383],[46.01531,6.443444],[46.015437,6.443544],[46.015561,6.443663],[46.015822,6.443949],[46.016064,6.444221],[46.016209,6.44438],[46.016291,6.444487],[46.016322,6.444542],[46.016369,6.444635],[46.016427,6.444778],[46.016484,6.444931],[46.016517,6.445022],[46.016546,6.445086],[46.016582,6.445148],[46.016645,6.445239],[46.016799,6.445445],[46.016891,6.445594],[46.016977,6.445738],[46.017043,6.445849],[46.017196,6.446103],[46.01731,6.446288],[46.017432,6.446464],[46.017532,6.446601],[46.017685,6.446796],[46.017796,6.446943],[46.017889,6.447085],[46.018056,6.447348],[46.01814,6.447499],[46.018201,6.447591],[46.018284,6.447693],[46.018505,6.44794],[46.0186,6.44805],[46.018717,6.448192],[46.018869,6.448368],[46.018996,6.448543],[46.019051,6.448597],[46.019228,6.448762],[46.019354,6.448888],[46.019399,6.448943],[46.019428,6.448988],[46.019457,6.449063],[46.01947,6.449099],[46.019484,6.44913]];
 
   function haversineM(lat1,lon1,lat2,lon2){
     var R=6371000, toRad=Math.PI/180;
@@ -268,54 +270,172 @@ a.suivi-link{color:var(--accent);font-weight:600;}
     return {cum:cum,total:total};
   }
   var TRACK_CUM = buildCumulative(TRACK);
+  // ---- recalage sur l'itineraire ----
+  // On ne sort pas du chemin : chaque point GPS est ramene sur le point le plus proche du trace
+  // officiel, et la distance parcourue est lue LE LONG du trace (pas en ligne droite entre deux
+  // points GPS). Apres un trou de reception, on repart du bon endroit sans "couper" la boucle, et
+  // un GPS decale de 30 m sur le cote n'ajoute plus de distance fantome.
+  var ROUTE_CUM = buildCumulative(TRACK);
+  var ROUTE_M = ROUTE_CUM.total;
+  var M_LAT = 111320, M_LON = 111320*Math.cos(TRACK[0][0]*Math.PI/180);
+  var ROUTE_XY = TRACK.map(function(p){ return [(p[1]-TRACK[0][1])*M_LON, (p[0]-TRACK[0][0])*M_LAT]; });
+  var SNAP_MAX_OFF_M = 80;   // plus loin que ca du chemin (ravito, rebond GPS) : point ignore
+  var SNAP_TIE_M = 25;       // portions du trace a peu pres aussi proches : on prend celle qui est devant
+  var MAX_SPEED_MS = 6;      // on ne peut pas avancer plus vite que ca le long du chemin
+
+  // Projection sur le trace. Pres du depart, le debut et la fin de la boucle sont a ~45 m l'un de
+  // l'autre : parmi les portions candidates, on garde celle qui est juste devant la position connue.
+  function snapForward(lat, lon, prevM){
+    var x=(lon-TRACK[0][1])*M_LON, y=(lat-TRACK[0][0])*M_LAT, cands=[], dmin=Infinity, i;
+    for(i=1;i<ROUTE_XY.length;i++){
+      var ax=ROUTE_XY[i-1][0], ay=ROUTE_XY[i-1][1], bx=ROUTE_XY[i][0], by=ROUTE_XY[i][1];
+      var vx=bx-ax, vy=by-ay, len2=vx*vx+vy*vy;
+      var f = len2>0 ? Math.max(0, Math.min(1, ((x-ax)*vx+(y-ay)*vy)/len2)) : 0;
+      var px=ax+f*vx, py=ay+f*vy, d=Math.sqrt((x-px)*(x-px)+(y-py)*(y-py));
+      var m=ROUTE_CUM.cum[i-1]+f*(ROUTE_CUM.cum[i]-ROUTE_CUM.cum[i-1]);
+      cands.push({d:d, m:m});
+      if(d<dmin) dmin=d;
+    }
+    var best=null;
+    cands.forEach(function(c){
+      if(c.d>dmin+SNAP_TIE_M) return;
+      var fwd=((c.m-prevM)%ROUTE_M+ROUTE_M)%ROUTE_M;
+      if(!best || fwd<best.fwd) best={fwd:fwd, d:dmin};
+    });
+    return best;
+  }
+  // Fait avancer la progression (en metres le long du trace, dans le tour en cours) avec un point.
+  // Renvoie la nouvelle progression, ou null si le point est a ignorer.
+  function advance(prevM, prevT, lat, lon, t){
+    var s=snapForward(lat, lon, prevM);
+    if(!s || s.d>SNAP_MAX_OFF_M) return null;
+    var fwd = s.fwd>ROUTE_M*0.8 ? 0 : s.fwd;  // leger recul du au bruit GPS : on reste sur place
+    if(fwd > 30+Math.max(0,t-prevT)/1000*MAX_SPEED_MS) return null; // saut impossible a pied
+    return Math.min(ROUTE_M, prevM+fwd);
+  }
+  // Progression le long du trace pour chaque point GPS du tour en cours (depuis le dernier tour).
+  function lapProgress(pts, anchorT){
+    var out=[], m=0, lastT=anchorT;
+    if(!anchorT) return out;
+    for(var i=0;i<pts.length;i++){
+      var p=pts[i];
+      if(p.t<anchorT) continue;
+      var nm=advance(m, lastT, p.lat, p.lon, p.t);
+      if(nm===null) continue;
+      m=nm; lastT=p.t;
+      out.push({t:p.t, m:m});
+    }
+    return out;
+  }
+  function computeProg(s){
+    var anchor = s.laps.length ? s.laps[s.laps.length-1].t : s.startedAt;
+    return lapProgress(s.track||[], anchor);
+  }
   function hybridKm(s){
-    var laps = s.laps.length;
-    var base = laps * s.cfg.loopKm;
-    var anchor = laps>0 ? s.laps[laps-1].t : s.startedAt;
-    if(!anchor) return base;
-    var pts = (s.track||[]).filter(function(p){ return p.t>=anchor; }).sort(function(a,b){ return a.t-b.t; });
-    var partialM=0;
-    for(var i=1;i<pts.length;i++){ partialM += haversineM(pts[i-1].lat,pts[i-1].lon,pts[i].lat,pts[i].lon); }
-    return base + partialM/1000;
+    var base = s.laps.length * s.cfg.loopKm;
+    var m = s.prog && s.prog.length ? s.prog[s.prog.length-1].m : 0;
+    return base + Math.min(m/ROUTE_M, 0.99)*s.cfg.loopKm;
+  }
+  function routePointAt(m){
+    m=Math.max(0, Math.min(ROUTE_M, m));
+    var lo=0, hi=ROUTE_CUM.cum.length-1;
+    while(hi-lo>1){ var mid=(lo+hi)>>1; if(ROUTE_CUM.cum[mid]<=m) lo=mid; else hi=mid; }
+    var seg=ROUTE_CUM.cum[hi]-ROUTE_CUM.cum[lo], f = seg>0 ? (m-ROUTE_CUM.cum[lo])/seg : 0;
+    return {idx:lo, ll:[TRACK[lo][0]+(TRACK[hi][0]-TRACK[lo][0])*f, TRACK[lo][1]+(TRACK[hi][1]-TRACK[lo][1])*f]};
+  }
+  function routeSliceTo(m){
+    var p=routePointAt(m);
+    return TRACK.slice(0, p.idx+1).concat([p.ll]);
+  }
+  // Progression a l'instant T, interpolee le long du trace entre deux points GPS.
+  function progAt(prog, T){
+    if(!prog.length || T<=prog[0].t) return 0;
+    var lo=0, hi=prog.length-1;
+    if(T>=prog[hi].t) return prog[hi].m;
+    while(hi-lo>1){ var mid=(lo+hi)>>1; if(prog[mid].t<=T) lo=mid; else hi=mid; }
+    var a=prog[lo], b=prog[hi];
+    return a.m+(b.m-a.m)*(T-a.t)/(b.t-a.t);
   }
 
-  var raceMap=null, mapTrackLine=null, mapMarker=null;
+  // Un meme passage peut etre compte par plusieurs sources (manuel, Termux, GPS navigateur) :
+  // les tours a moins de 5 min du precedent sont fusionnes en un seul (on garde l'heure la plus tot).
+  var LAP_DEDUP_MS = 5*60*1000;
+  function normLaps(raw){
+    var sorted=(raw||[]).slice().sort(function(a,b){ return a.t-b.t; }), out=[];
+    sorted.forEach(function(l){
+      var last=out[out.length-1];
+      if(last && l.t-last.t<LAP_DEDUP_MS){
+        last.raw.push(l);
+        if(last.sources.indexOf(l.source)<0) last.sources.push(l.source);
+      } else {
+        out.push({t:l.t, source:l.source, sources:[l.source], raw:[l]});
+      }
+    });
+    return out;
+  }
+  function srcLabel(lap){
+    return lap.sources.map(function(s){ return s==='termux' ? 'Termux' : (s==='gps' ? 'GPS' : 'manuel'); }).join(' + ');
+  }
+
+  // Le trace GPS est ecrit par Termux dans des documents "morceaux" (un par tranche de 5 min,
+  // champ trackOf = id de la sortie) pour rester petit et sous les quotas sur 24h.
+  var trackChunks={}, trackFor=null, trackUnsub=null;
+  function subscribeTrack(id, onChange){
+    if(trackUnsub){ trackUnsub(); trackUnsub=null; }
+    if(trackFor!==id){ trackChunks={}; trackFor=id; }
+    trackUnsub = sessionsRef.where('trackOf','==',id).onSnapshot(function(snap){
+      snap.docChanges().forEach(function(ch){
+        if(ch.type==='removed') delete trackChunks[ch.doc.id];
+        else trackChunks[ch.doc.id]=ch.doc.data().pts||[];
+      });
+      onChange();
+    }, function(){ /* reseau : on garde ce qu'on a */ });
+  }
+  function unsubscribeTrack(){
+    if(trackUnsub){ trackUnsub(); trackUnsub=null; }
+    trackChunks={}; trackFor=null;
+  }
+  function allTrackPoints(legacy){
+    var pts=(legacy||[]).slice();
+    Object.keys(trackChunks).forEach(function(k){ Array.prototype.push.apply(pts, trackChunks[k]); });
+    pts.sort(function(a,b){ return a.t-b.t; });
+    return pts;
+  }
+
+  var raceMap=null, mapDoneLine=null, mapMarker=null;
   function ensureMap(){
     if(raceMap) return raceMap;
-    raceMap = L.map('race-map', {zoomControl:true});
+    raceMap = L.map('race-map', {zoomControl:true, preferCanvas:true});
     L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
       maxZoom:17, attribution:'&copy; OpenStreetMap contributors, SRTM | &copy; OpenTopoMap (CC-BY-SA)'
     }).addTo(raceMap);
     L.polyline(TRACK, {color:'#5B6660', weight:3, dashArray:'6,6', opacity:.7}).addTo(raceMap);
-    mapTrackLine = L.polyline([], {color:'#E1531F', weight:4}).addTo(raceMap);
-    mapMarker = L.circleMarker(TRACK[0], {radius:7, color:'#E1531F', fillColor:'#E1531F', fillOpacity:1}).addTo(raceMap);
+    mapDoneLine = L.polyline([], {color:'#E1531F', weight:5}).addTo(raceMap);
+    mapMarker = L.circleMarker(TRACK[0], {radius:8, color:'#FFFFFF', weight:2, fillColor:'#E1531F', fillOpacity:1}).addTo(raceMap);
     raceMap.fitBounds(L.latLngBounds(TRACK), {padding:[16,16]});
     return raceMap;
   }
-  var mapAnim=null, mapAnimRAF=null;
-  function animateMapMarker(now){
-    if(!mapAnim){ mapAnimRAF=null; return; }
-    var t=Math.min(1,(now-mapAnim.start)/mapAnim.duration);
-    var lat=mapAnim.from[0]+(mapAnim.to[0]-mapAnim.from[0])*t;
-    var lon=mapAnim.from[1]+(mapAnim.to[1]-mapAnim.from[1])*t;
-    mapMarker.setLatLng([lat,lon]);
-    if(t<1){ mapAnimRAF=requestAnimationFrame(animateMapMarker); } else { mapAnim=null; mapAnimRAF=null; }
+  // Trait et point sont tous deux calcules depuis la meme progression le long du trace : le trait
+  // s'arrete toujours exactement sous le point. Les points Termux arrivent par paquets toutes les
+  // ~10 s : on rejoue la progression avec 15 s de decalage, a vitesse reelle, pour que le point
+  // glisse le long du chemin au lieu de sauter.
+  var PLAYBACK_DELAY_MS = 15000;
+  var localFix = null; // position du telephone vue par le navigateur (ecran allume), en temps reel
+  function tickMap(){
+    if(!raceMap || !state || document.hidden || document.getElementById('panel-carte').hidden) return;
+    if(!state.startedAt){ clearMap(); return; }
+    var prog=state.prog||[], now=Date.now();
+    var last = prog.length ? prog[prog.length-1] : {t:(state.laps.length ? state.laps[state.laps.length-1].t : state.startedAt), m:0};
+    // ecran allume : on avance depuis la derniere position Termux avec le GPS du telephone
+    var liveM = localFix && now-localFix.t<15000 ? advance(last.m, last.t, localFix.lat, localFix.lon, localFix.t) : null;
+    var m = liveM!==null ? liveM : progAt(prog, now-PLAYBACK_DELAY_MS);
+    mapDoneLine.setLatLngs(routeSliceTo(m));
+    mapMarker.setLatLng(routePointAt(m).ll);
   }
-  function renderMap(s){
-    if(!raceMap || !s) return;
-    var pts = (s.track||[]).slice().sort(function(a,b){ return a.t-b.t; }).map(function(p){ return [p.lat,p.lon]; });
-    mapTrackLine.setLatLngs(pts);
-    if(!pts.length) return;
-    var target = pts[pts.length-1];
-    var current = mapMarker.getLatLng();
-    if(current.lat===target[0] && current.lng===target[1]) return;
-    mapAnim = {from:[current.lat,current.lng], to:target, start:performance.now(), duration:15000};
-    if(!mapAnimRAF) mapAnimRAF=requestAnimationFrame(animateMapMarker);
-  }
+  setInterval(tickMap, 250);
   function clearMap(){
-    mapAnim=null;
     if(!raceMap) return;
-    mapTrackLine.setLatLngs([]);
+    mapDoneLine.setLatLngs([]);
     mapMarker.setLatLng(TRACK[0]);
   }
   function positionAtFraction(points,cumData,f){
@@ -366,52 +486,67 @@ a.suivi-link{color:var(--accent);font-weight:600;}
     return (neg?'-':'')+out;
   }
   function fmtTime(ts){ return new Date(ts).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}); }
+  function fmtTimeSec(ts){ return new Date(ts).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit',second:'2-digit'}); }
 
   var currentSessionId = null;
   try{ currentSessionId = localStorage.getItem('ck-current-session-id') || null; }catch(e){}
   var state = null;
   var currentUnsub = null;
 
+  function makeState(cfg, startedAt, rawLaps, legacyTrack){
+    var s = {cfg: cfg || DEFAULT_CFG, startedAt: startedAt || null, rawLaps: rawLaps || [], legacyTrack: legacyTrack || []};
+    s.laps = normLaps(s.rawLaps);
+    s.track = allTrackPoints(s.legacyTrack);
+    s.prog = computeProg(s);
+    return s;
+  }
+  function stateFromDoc(d){ return makeState(d.cfg, d.startedAt, d.laps, d.track); }
+
   function saveLocalCache(){
     try{
       localStorage.setItem('ck-current-session-id', currentSessionId || '');
-      localStorage.setItem('ck-race-cache', state ? JSON.stringify(state) : '');
+      localStorage.setItem('ck-race-cache', state ? JSON.stringify({cfg:state.cfg, startedAt:state.startedAt, rawLaps:state.rawLaps}) : '');
     }catch(e){}
   }
 
+  // Toute l'ecriture des tours passe par des ajouts/retraits unitaires (arrayUnion/arrayRemove) :
+  // la page ne reecrit jamais le tableau entier, donc elle ne peut plus effacer un tour que Termux
+  // vient d'ajouter avec une copie locale perimee.
   function subscribeToSession(id){
     if(currentUnsub){ currentUnsub(); currentUnsub=null; }
-    currentUnsub = sessionsRef.doc(id).onSnapshot(function(doc){
+    currentUnsub = sessionsRef.doc(id).onSnapshot({includeMetadataChanges:true}, function(doc){
       if(!doc.exists || id!==currentSessionId) return;
-      var d = doc.data();
-      state = {cfg: d.cfg || DEFAULT_CFG, startedAt: d.startedAt || null, laps: d.laps || [], track: d.track || []};
+      state = stateFromDoc(doc.data());
+      if(doc.metadata.hasPendingWrites) setSync('pending', 'En attente de réseau — rien n\'est perdu');
+      else if(doc.metadata.fromCache) setSync('pending', 'Hors ligne — données locales');
+      else setSync('ok', 'Synchronisé '+new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit',second:'2-digit'}));
       saveLocalCache();
       render(state);
-    }, function(){ /* erreur reseau : on garde l'etat local courant */ });
+    }, function(){ setSync('pending', 'Hors ligne — en attente de réseau'); });
+    subscribeTrack(id, function(){
+      if(!state || id!==currentSessionId) return;
+      state.track = allTrackPoints(state.legacyTrack);
+      state.prog = computeProg(state);
+      render(state);
+    });
   }
   function unsubscribeSession(){
     if(currentUnsub){ currentUnsub(); currentUnsub=null; }
+    unsubscribeTrack();
   }
+  // Au retour sur la page (ecran rallume, appli ressortie), on relance l'ecoute : sur mobile le
+  // canal temps reel peut rester endormi un moment apres une mise en veille.
+  document.addEventListener('visibilitychange', function(){
+    if(!document.hidden && currentSessionId) subscribeToSession(currentSessionId);
+    updateGeoWatch();
+  });
+  function sessionDoc(){ return sessionsRef.doc(currentSessionId); }
 
   function setSync(status, text){
     var dot=document.getElementById('sync-dot'), t=document.getElementById('sync-text');
     dot.className='sync-dot is-'+status;
     t.textContent=text;
   }
-
-  function pushState(){
-    if(!currentSessionId || !state) return;
-    // "track" est ecrit exclusivement par Termux (appendMissingElements) : ne jamais le reecrire ici,
-    // sinon un set() avec une copie locale un peu perimee peut effacer un point tout juste arrive.
-    var payload = {cfg: state.cfg, startedAt: state.startedAt, laps: state.laps};
-    payload.updatedAt = firebase.firestore.FieldValue.serverTimestamp();
-    sessionsRef.doc(currentSessionId).set(payload, {merge:true}).then(function(){
-      setSync('ok', 'Synchronisé '+new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit',second:'2-digit'}));
-    }).catch(function(){
-      setSync('pending', 'Hors ligne — en attente de réseau');
-    });
-  }
-  setInterval(function(){ if(currentSessionId && state && state.startedAt) pushState(); }, 60000);
 
   var toastTimer=null;
   function toast(msg, opts){
@@ -439,6 +574,7 @@ a.suivi-link{color:var(--accent);font-weight:600;}
     document.getElementById('session-end-row').hidden = !has;
     document.getElementById('session-current').hidden = !has;
     if(!has) document.getElementById('session-browser').hidden = false;
+    updateGeoWatch();
   }
 
   function loadSessionsList(){
@@ -450,7 +586,7 @@ a.suivi-link{color:var(--accent);font-weight:600;}
         var row=document.createElement('div');
         row.className='session-row';
         var dateTxt = d.createdAt && d.createdAt.toDate ? d.createdAt.toDate().toLocaleString('fr-FR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}) : '';
-        var laps = (d.laps||[]).length;
+        var laps = normLaps(d.laps).length;
         var label = (d.active ? '<span class="session-dot"></span>' : '') + (d.name||dateTxt) + ' — ' + laps + ' tours';
         var span=document.createElement('span');
         span.innerHTML = label;
@@ -475,7 +611,12 @@ a.suivi-link{color:var(--accent);font-weight:600;}
 
   function deleteSession(id, label){
     if(!window.confirm('Supprimer définitivement "'+label+'" ? Cette action est irréversible.')) return;
-    sessionsRef.doc(id).delete().then(function(){
+    sessionsRef.where('trackOf','==',id).get().then(function(snap){
+      var batches=[], batch=db.batch(), n=0;
+      snap.forEach(function(d){ batch.delete(d.ref); if(++n%400===0){ batches.push(batch); batch=db.batch(); } });
+      batch.delete(sessionsRef.doc(id)); batches.push(batch);
+      return Promise.all(batches.map(function(b){ return b.commit(); }));
+    }).then(function(){
       if(id===currentSessionId){
         unsubscribeSession();
         currentSessionId=null; state=null; saveLocalCache(); showSessionUI(false); clearMap();
@@ -495,7 +636,8 @@ a.suivi-link{color:var(--accent);font-weight:600;}
 
   function applyLoadedSession(id, d){
     currentSessionId = id;
-    state = {cfg: d.cfg || DEFAULT_CFG, startedAt: d.startedAt || null, laps: d.laps || [], track: d.track || []};
+    unsubscribeTrack();
+    state = stateFromDoc(d);
     saveLocalCache();
     showSessionUI(true);
     document.getElementById('session-current').textContent = 'Sortie active : ' + (d.name || id);
@@ -550,17 +692,24 @@ a.suivi-link{color:var(--accent);font-weight:600;}
   document.getElementById('btn-end-session').addEventListener('click', endCurrentSession);
 
   // ---- race logic ----
-  function afterLocalChange(){ saveLocalCache(); render(state); pushState(); }
+  // Pas de mise a jour locale a la main : avec la persistance Firestore, l'ecouteur de la sortie
+  // voit l'ecriture tout de suite (meme hors ligne) et re-affiche.
+  var FV = firebase.firestore.FieldValue;
+  function writeFailed(){ toast('Écriture refusée — réessaie.'); }
   function addLap(source){
-    if(!state || !state.startedAt) return;
-    state.laps.push({n:state.laps.length+1, t:Date.now(), source:source});
-    afterLocalChange();
+    if(!state || !state.startedAt || !currentSessionId) return;
+    var now=Date.now(), last=state.laps[state.laps.length-1];
+    if(last && now-last.t<LAP_DEDUP_MS){
+      toast('Tour déjà compté à '+fmtTimeSec(last.t)+' ('+srcLabel(last)+').');
+      return;
+    }
+    sessionDoc().update({laps: FV.arrayUnion({t:now, source:source}), updatedAt: FV.serverTimestamp()}).catch(writeFailed);
   }
   function undoLap(){
-    if(!state || !state.laps.length) return;
-    state.laps.pop();
-    state.laps.forEach(function(l,i){ l.n=i+1; });
-    afterLocalChange();
+    if(!state || !state.laps.length || !currentSessionId) return;
+    var last=state.laps[state.laps.length-1];
+    // retire toutes les entrees fusionnees dans ce tour (ex. manuel + Termux)
+    sessionDoc().update({laps: FV.arrayRemove.apply(null, last.raw), updatedAt: FV.serverTimestamp()}).catch(writeFailed);
   }
 
   function paceInfo(s, now){
@@ -570,7 +719,9 @@ a.suivi-link{color:var(--accent);font-weight:600;}
     var targetPaceMs = s.cfg.raceDurationH*3600000/s.cfg.targetLaps;
     var deltaMs = effectiveLaps*targetPaceMs - elapsed;
     var projLaps=null, projKm=null;
-    if(n>0){ var avgPace=elapsed/n; projLaps=(s.cfg.raceDurationH*3600000)/avgPace; projKm=projLaps*s.cfg.loopKm; }
+    // compte aussi la partie deja faite du tour en cours (recalee sur le chemin) : sinon, au fil du
+    // tour, le temps avance mais pas le nombre de tours et la projection s'effondre a tort
+    if(n>0 && elapsed>0){ projLaps=effectiveLaps*(s.cfg.raceDurationH*3600000)/elapsed; projKm=projLaps*s.cfg.loopKm; }
     return {elapsed:elapsed, deltaMs:deltaMs, projLaps:projLaps, projKm:projKm};
   }
 
@@ -584,7 +735,6 @@ a.suivi-link{color:var(--accent);font-weight:600;}
     document.getElementById('hero-dplus').textContent = Math.round(s.laps.length*s.cfg.loopGainM);
     var pct = Math.min(100,(s.laps.length/s.cfg.targetLaps)*100);
     document.getElementById('hero-progress').style.width = pct+'%';
-    if(raceMap) renderMap(s);
 
     var tbody=document.getElementById('lap-rows');
     tbody.innerHTML='';
@@ -598,8 +748,7 @@ a.suivi-link{color:var(--accent);font-weight:600;}
       var lap=s.laps[j];
       var tr=document.createElement('tr');
       var cumKm=((j+1)*s.cfg.loopKm).toFixed(1);
-      var srcLabel = lap.source==='termux' ? 'Termux' : (lap.source==='gps' ? 'GPS' : 'manuel');
-      tr.innerHTML='<td>'+(j+1)+'</td><td class="mono">'+fmtTime(lap.t)+'</td><td class="mono">'+fmtDur(durations[j])+'</td><td class="mono">'+cumKm+' km</td><td><span class="src-badge">'+srcLabel+'</span></td>';
+      tr.innerHTML='<td>'+(j+1)+'</td><td class="mono">'+fmtTime(lap.t)+'</td><td class="mono">'+fmtDur(durations[j])+'</td><td class="mono">'+cumKm+' km</td><td><span class="src-badge">'+srcLabel(lap)+'</span></td>';
       tbody.appendChild(tr);
     }
     if(s.laps.length){
@@ -627,6 +776,14 @@ a.suivi-link{color:var(--accent);font-weight:600;}
   function tickLive(){
     var now=Date.now(), s=state;
     if(!s) return;
+    var lastPt = s.track.length ? s.track[s.track.length-1] : null;
+    var ageEl = document.getElementById('gps-age');
+    if(!lastPt){ ageEl.textContent = s.startedAt ? '· GPS Termux : rien reçu' : ''; ageEl.className='gps-age is-stale'; }
+    else {
+      var age = now-lastPt.t;
+      ageEl.textContent = '· GPS il y a '+(age<60000 ? Math.round(age/1000)+' s' : fmtDur(age));
+      ageEl.className = 'gps-age'+(age>60000 ? ' is-stale' : '');
+    }
     if(s.startedAt){
       var elapsed=now-s.startedAt;
       var remaining=s.cfg.raceDurationH*3600000-elapsed;
@@ -653,9 +810,8 @@ a.suivi-link{color:var(--accent);font-weight:600;}
   setInterval(tickLive, 1000);
 
   document.getElementById('btn-start').addEventListener('click', function(){
-    if(!state) return;
-    state.startedAt=Date.now();
-    afterLocalChange();
+    if(!state || !currentSessionId) return;
+    sessionDoc().update({startedAt: Date.now(), updatedAt: FV.serverTimestamp()}).catch(writeFailed);
   });
   document.getElementById('btn-lap').addEventListener('click', function(){ addLap('manuel'); });
 
@@ -673,26 +829,38 @@ a.suivi-link{color:var(--accent);font-weight:600;}
     undoLap();
   });
 
-  var gpsWatchId=null, gpsArmed=false;
-  function setGpsEnabled(on){
-    try{ localStorage.setItem('ck-gps-enabled', on?'1':'0'); }catch(e){}
-    if(on){
-      if(!('geolocation' in navigator)){ toast('GPS non disponible sur ce navigateur.'); document.getElementById('gps-toggle').checked=false; return; }
+  // GPS du navigateur : sert quand l'ecran est allume, soit pour afficher ta position en temps
+  // reel sur la carte (onglet Carte ouvert), soit pour la detection auto "GPS auto (beta)".
+  // Termux reste la source en fond (ecran eteint).
+  var gpsWatchId=null, gpsArmed=false, gpsAutoLap=false;
+  try{ gpsAutoLap = localStorage.getItem('ck-gps-enabled')==='1'; }catch(e){}
+  document.getElementById('gps-toggle').checked = gpsAutoLap;
+  function updateGeoWatch(){
+    var mapOpen = !document.getElementById('panel-carte').hidden;
+    var want = !!currentSessionId && !document.hidden && (gpsAutoLap || mapOpen) && ('geolocation' in navigator);
+    if(want && gpsWatchId==null){
       gpsArmed=false;
-      gpsWatchId=navigator.geolocation.watchPosition(onGpsPos, onGpsErr, {enableHighAccuracy:true, maximumAge:5000, timeout:20000});
-    } else if(gpsWatchId!=null){
-      navigator.geolocation.clearWatch(gpsWatchId); gpsWatchId=null;
+      gpsWatchId=navigator.geolocation.watchPosition(onGpsPos, onGpsErr, {enableHighAccuracy:true, maximumAge:0, timeout:20000});
+    } else if(!want && gpsWatchId!=null){
+      navigator.geolocation.clearWatch(gpsWatchId); gpsWatchId=null; localFix=null;
     }
   }
+  function setGpsEnabled(on){
+    try{ localStorage.setItem('ck-gps-enabled', on?'1':'0'); }catch(e){}
+    if(on && !('geolocation' in navigator)){ toast('GPS non disponible sur ce navigateur.'); document.getElementById('gps-toggle').checked=false; on=false; }
+    gpsAutoLap=on;
+    updateGeoWatch();
+  }
   function onGpsPos(pos){
-    if(!state) return;
+    if(pos.coords.accuracy<=50) localFix={lat:pos.coords.latitude, lon:pos.coords.longitude, t:Date.now()};
+    if(!state || !gpsAutoLap || !state.startedAt) return;
     var d=haversineM(pos.coords.latitude,pos.coords.longitude,TRACK[0][0],TRACK[0][1]);
     var lastT = state.laps.length ? state.laps[state.laps.length-1].t : state.startedAt;
     var sinceMs = Date.now()-(lastT||Date.now());
     if(!gpsArmed && d>100) gpsArmed=true;
     if(gpsArmed && d<30 && sinceMs>8*60*1000){ gpsArmed=false; confirmAutoLap(); }
   }
-  function onGpsErr(err){ toast('GPS indisponible : '+err.message); }
+  function onGpsErr(err){ if(gpsAutoLap) toast('GPS indisponible : '+err.message); }
   function confirmAutoLap(){
     var cancelled=false;
     toast('Tour '+(state.laps.length+1)+' détecté par GPS', {
@@ -702,115 +870,10 @@ a.suivi-link{color:var(--accent);font-weight:600;}
   }
   document.getElementById('gps-toggle').addEventListener('change', function(e){ setGpsEnabled(e.target.checked); });
 
+  // Le script est servi a cote de cette page : une seule source de verite, pas de copie a tenir a jour.
   var TERMUX_SETUP_CMD = [
-    'pkg update -y && pkg install -y python termux-api',
-    'cat > reveil-tour.py << \'PYEOF\'',
-    '#!/data/data/com.termux/files/usr/bin/python3',
-    '# reveil-tour.py -- envoie les tours ET la position GPS reguliere a l\'appli (Firestore), en silence.',
-    '# Ne fait rien tant qu\'aucune "sortie" n\'est active dans coureur.html.',
-    'import json, math, subprocess, time, urllib.request',
-    'PROJECT = "mes-randonnees-314e9"',
-    'BASE = "https://firestore.googleapis.com/v1/projects/" + PROJECT + "/databases/(default)/documents"',
-    'LAT0 = ' + TRACK[0][0],
-    'LON0 = ' + TRACK[0][1],
-    'FAR_M = 100',
-    'CAPTURE_M = 80',
-    'MOVE_AWAY_M = 20',
-    'MIN_LAP_S = 480',
-    'POLL_S = 20',
-    'MAX_ACCURACY_M = 40',
-    'MAX_SPEED_MS = 7.0',
-    'def haversine(lat1, lon1, lat2, lon2):',
-    '    r = 6371000',
-    '    p1, p2 = math.radians(lat1), math.radians(lat2)',
-    '    dphi = math.radians(lat2 - lat1)',
-    '    dl = math.radians(lon2 - lon1)',
-    '    a = math.sin(dphi / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2',
-    '    return 2 * r * math.asin(math.sqrt(a))',
-    'def http_post(url, body):',
-    '    req = urllib.request.Request(url, data=json.dumps(body).encode("utf-8"), headers={"Content-Type": "application/json"}, method="POST")',
-    '    with urllib.request.urlopen(req, timeout=15) as resp:',
-    '        return json.loads(resp.read().decode("utf-8"))',
-    'def get_active_session():',
-    '    body = {"structuredQuery": {"from": [{"collectionId": "race_sessions"}], "where": {"fieldFilter": {"field": {"fieldPath": "active"}, "op": "EQUAL", "value": {"booleanValue": True}}}, "limit": 1}}',
-    '    try:',
-    '        results = http_post(BASE + ":runQuery", body)',
-    '    except Exception:',
-    '        return None',
-    '    for r in results:',
-    '        if "document" in r:',
-    '            return r["document"]["name"].split("/")[-1]',
-    '    return None',
-    'def get_location():',
-    '    out = subprocess.run(["termux-location", "-p", "gps", "-r", "once"], capture_output=True, text=True, timeout=30)',
-    '    data = json.loads(out.stdout)',
-    '    return data["latitude"], data["longitude"], data.get("accuracy")',
-    'def append_lap(session_id, t_ms=None):',
-    '    doc_path = "projects/" + PROJECT + "/databases/(default)/documents/race_sessions/" + session_id',
-    '    now_ms = t_ms if t_ms is not None else int(time.time() * 1000)',
-    '    body = {"writes": [{"transform": {"document": doc_path, "fieldTransforms": [{"fieldPath": "laps", "appendMissingElements": {"values": [{"mapValue": {"fields": {"t": {"integerValue": str(now_ms)}, "source": {"stringValue": "termux"}}}}]}}, {"fieldPath": "updatedAt", "setToServerValue": "REQUEST_TIME"}]}}]}',
-    '    http_post(BASE + ":commit", body)',
-    'def append_track_point(session_id, lat, lon, now_ms):',
-    '    doc_path = "projects/" + PROJECT + "/databases/(default)/documents/race_sessions/" + session_id',
-    '    body = {"writes": [{"transform": {"document": doc_path, "fieldTransforms": [{"fieldPath": "track", "appendMissingElements": {"values": [{"mapValue": {"fields": {"t": {"integerValue": str(now_ms)}, "lat": {"doubleValue": lat}, "lon": {"doubleValue": lon}}}}]}}]}}]}',
-    '    http_post(BASE + ":commit", body)',
-    'def main():',
-    '    armed = False',
-    '    last_trigger = 0.0',
-    '    last_good = None',
-    '    min_dist = None',
-    '    min_dist_time = None',
-    '    print("reveil-tour: demarre, silencieux, Ctrl+C pour arreter.")',
-    '    while True:',
-    '        session_id = get_active_session()',
-    '        if not session_id:',
-    '            time.sleep(POLL_S)',
-    '            continue',
-    '        try:',
-    '            lat, lon, accuracy = get_location()',
-    '        except Exception:',
-    '            time.sleep(POLL_S)',
-    '            continue',
-    '        now = time.time()',
-    '        if accuracy is not None and accuracy > MAX_ACCURACY_M:',
-    '            time.sleep(POLL_S)',
-    '            continue',
-    '        if last_good is not None:',
-    '            plat, plon, ptime = last_good',
-    '            dt = max(now - ptime, 1.0)',
-    '            jump_m = haversine(plat, plon, lat, lon)',
-    '            if jump_m / dt > MAX_SPEED_MS:',
-    '                time.sleep(POLL_S)',
-    '                continue',
-    '        last_good = (lat, lon, now)',
-    '        try:',
-    '            append_track_point(session_id, lat, lon, int(now * 1000))',
-    '        except Exception:',
-    '            pass',
-    '        d = haversine(lat, lon, LAT0, LON0)',
-    '        if not armed and d > FAR_M:',
-    '            armed = True',
-    '            min_dist = None',
-    '            min_dist_time = None',
-    '        if armed:',
-    '            if min_dist is None or d < min_dist:',
-    '                min_dist = d',
-    '                min_dist_time = now',
-    '            if min_dist <= CAPTURE_M and d > min_dist + MOVE_AWAY_M and (now - last_trigger) > MIN_LAP_S:',
-    '                armed = False',
-    '                last_trigger = min_dist_time',
-    '                try:',
-    '                    append_lap(session_id, int(min_dist_time * 1000))',
-    '                    print("tour envoye a", session_id)',
-    '                except Exception as e:',
-    '                    print("echec envoi:", e)',
-    '                min_dist = None',
-    '                min_dist_time = None',
-    '        time.sleep(POLL_S)',
-    'if __name__ == "__main__":',
-    '    main()',
-    'PYEOF',
-    'termux-wake-lock',
+    'pkg update -y && pkg install -y python termux-api curl',
+    'curl -fsSL https://hapla-ventre.github.io/24h-cenise/reveil-tour.py -o reveil-tour.py',
     'python3 reveil-tour.py'
   ].join('\n');
 
@@ -841,9 +904,10 @@ a.suivi-link{color:var(--accent);font-weight:600;}
       document.getElementById('panel-replay').hidden = tab!=='replay';
       if(tab==='carte'){
         ensureMap();
-        setTimeout(function(){ raceMap.invalidateSize(); if(state) renderMap(state); }, 50);
+        setTimeout(function(){ raceMap.invalidateSize(); tickMap(); }, 50);
       }
       try{ sessionStorage.setItem('ck-active-tab', tab); }catch(e){}
+      updateGeoWatch();
     });
   });
 
@@ -958,12 +1022,12 @@ a.suivi-link{color:var(--accent);font-weight:600;}
       var cachedOk=false;
       try{
         var cache = JSON.parse(localStorage.getItem('ck-race-cache')||'null');
-        if(cache && cache.cfg){ state=cache; cachedOk=true; }
+        if(cache && cache.cfg){ state=makeState(cache.cfg, cache.startedAt, cache.rawLaps||cache.laps); cachedOk=true; }
       }catch(e){}
       sessionsRef.doc(currentSessionId).get().then(function(doc){
         if(doc.exists){
           var d=doc.data();
-          if(!cachedOk){ state = {cfg:d.cfg||DEFAULT_CFG, startedAt:d.startedAt||null, laps:d.laps||[], track:d.track||[]}; }
+          if(!cachedOk){ state = stateFromDoc(d); }
           showSessionUI(true);
           document.getElementById('session-current').textContent='Sortie active : '+(d.name||currentSessionId);
           document.getElementById('session-current').hidden=false;

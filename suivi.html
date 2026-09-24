@@ -125,7 +125,7 @@ h1{margin:2px 0 0;font-family:'Big Shoulders',sans-serif;font-weight:800;font-si
   var db = firebase.firestore();
   var sessionsRef = db.collection('race_sessions');
 
-  var TRACK = [[46.019485,6.449133],[46.019457,6.449063],[46.018744,6.448989],[46.01671,6.44905],[46.016173,6.449107],[46.01531,6.449329],[46.01438,6.449471],[46.014323,6.44946],[46.013802,6.448824],[46.013092,6.448316],[46.012453,6.447947],[46.011994,6.447806],[46.011856,6.447808],[46.010469,6.448008],[46.010184,6.448327],[46.009618,6.448753],[46.009026,6.449381],[46.008923,6.449406],[46.008856,6.448886],[46.008924,6.447992],[46.008914,6.447954],[46.008799,6.448001],[46.008683,6.448176],[46.008899,6.447585],[46.009074,6.446899],[46.009269,6.446526],[46.009402,6.445981],[46.009856,6.445073],[46.009934,6.444279],[46.009879,6.443558],[46.010043,6.440977],[46.010522,6.439406],[46.010683,6.439131],[46.01085,6.439051],[46.011152,6.439218],[46.011453,6.439496],[46.012142,6.43997],[46.014079,6.441614],[46.014294,6.441697],[46.014362,6.441685],[46.014404,6.441613],[46.014862,6.442043],[46.014986,6.442258],[46.015226,6.443358],[46.015561,6.443663],[46.016291,6.444487],[46.016582,6.445148],[46.018201,6.447591],[46.018996,6.448543],[46.019354,6.448888],[46.019484,6.44913]];
+  var TRACK = [[46.019485,6.449133],[46.01947,6.449099],[46.019457,6.449063],[46.019175,6.449044],[46.0191,6.449036],[46.018963,6.449023],[46.018744,6.448989],[46.018479,6.448989],[46.018261,6.448993],[46.018082,6.448992],[46.017908,6.449],[46.017658,6.449023],[46.017444,6.449031],[46.017221,6.449035],[46.016991,6.449042],[46.01671,6.44905],[46.01656,6.449063],[46.016365,6.449076],[46.016173,6.449107],[46.015939,6.449162],[46.015545,6.449238],[46.01549,6.449253],[46.015443,6.449301],[46.01531,6.449329],[46.015192,6.449352],[46.01497,6.449381],[46.014821,6.449393],[46.014699,6.449404],[46.014565,6.449452],[46.014442,6.449471],[46.01438,6.449471],[46.014323,6.44946],[46.014247,6.449373],[46.014011,6.44909],[46.013876,6.448895],[46.013802,6.448824],[46.01361,6.44869],[46.013436,6.448571],[46.013258,6.448426],[46.013092,6.448316],[46.012902,6.448198],[46.012669,6.448065],[46.012453,6.447947],[46.012302,6.447896],[46.012133,6.447848],[46.011994,6.447806],[46.011856,6.447808],[46.011619,6.44786],[46.011442,6.447882],[46.011285,6.447908],[46.011113,6.447922],[46.011003,6.447946],[46.010883,6.447946],[46.010808,6.447949],[46.010767,6.447967],[46.010592,6.447967],[46.010527,6.447977],[46.010469,6.448008],[46.010374,6.448077],[46.010303,6.448154],[46.010258,6.448222],[46.010213,6.448295],[46.010184,6.448327],[46.010136,6.448354],[46.010054,6.44844],[46.009977,6.44848],[46.009936,6.448519],[46.009866,6.448551],[46.009805,6.448598],[46.00971,6.448684],[46.009618,6.448753],[46.009572,6.448816],[46.0095,6.448905],[46.009365,6.449026],[46.009216,6.449166],[46.009214,6.449169],[46.009064,6.449333],[46.009026,6.449381],[46.008997,6.449404],[46.008948,6.449421],[46.008923,6.449406],[46.008917,6.449312],[46.008888,6.449196],[46.008869,6.44909],[46.008858,6.448999],[46.008856,6.448886],[46.00887,6.44871],[46.00889,6.448522],[46.008901,6.44829],[46.008912,6.448118],[46.008926,6.448034],[46.008924,6.447992],[46.008914,6.447954],[46.00883,6.44798],[46.008813,6.447993],[46.008799,6.448001],[46.008792,6.448029],[46.008757,6.44807],[46.008727,6.448115],[46.008683,6.448176],[46.008698,6.448126],[46.00874,6.448038],[46.008758,6.447996],[46.008774,6.447958],[46.008784,6.447929],[46.008786,6.447906],[46.008831,6.447796],[46.008843,6.447738],[46.008876,6.447643],[46.008899,6.447585],[46.008942,6.44743],[46.008963,6.447344],[46.00901,6.447188],[46.009018,6.447122],[46.009043,6.446994],[46.009065,6.44694],[46.009074,6.446899],[46.0091,6.446849],[46.009129,6.446816],[46.0092,6.446685],[46.009241,6.446599],[46.009269,6.446526],[46.00929,6.446412],[46.009321,6.446277],[46.009353,6.446131],[46.009402,6.445981],[46.009452,6.445882],[46.009489,6.445821],[46.009552,6.445737],[46.009596,6.445624],[46.009655,6.445482],[46.009679,6.445445],[46.009699,6.445398],[46.009734,6.445339],[46.009758,6.445289],[46.009765,6.445248],[46.00978,6.445214],[46.009819,6.445157],[46.009836,6.445136],[46.009856,6.445073],[46.009867,6.445026],[46.009871,6.444896],[46.009874,6.444627],[46.00989,6.444565],[46.009893,6.444513],[46.00992,6.444444],[46.009925,6.444359],[46.009934,6.444279],[46.009929,6.444227],[46.00991,6.444141],[46.009908,6.444065],[46.009913,6.444015],[46.009893,6.443923],[46.009881,6.443828],[46.009879,6.443715],[46.009879,6.443558],[46.009892,6.443412],[46.009913,6.443247],[46.00992,6.4432],[46.00992,6.443117],[46.00992,6.443086],[46.009926,6.443041],[46.009924,6.44295],[46.009946,6.442761],[46.00996,6.442662],[46.009973,6.442389],[46.00999,6.442161],[46.010007,6.442005],[46.010009,6.441983],[46.010015,6.44184],[46.010013,6.44178],[46.010014,6.441504],[46.010025,6.441262],[46.01004,6.441126],[46.010043,6.440977],[46.010068,6.440858],[46.010112,6.44072],[46.010175,6.440583],[46.010205,6.440526],[46.010223,6.440469],[46.010244,6.4404],[46.010293,6.440239],[46.010334,6.440042],[46.010362,6.43992],[46.010387,6.439758],[46.010412,6.439705],[46.010463,6.439579],[46.010522,6.439406],[46.0106,6.439243],[46.010683,6.439131],[46.010708,6.439113],[46.010741,6.439101],[46.010772,6.439096],[46.0108,6.439081],[46.01085,6.439051],[46.010938,6.439085],[46.01101,6.439123],[46.011152,6.439218],[46.011279,6.439319],[46.011368,6.439408],[46.011453,6.439496],[46.011534,6.439553],[46.011622,6.439606],[46.011714,6.439669],[46.01179,6.439728],[46.011883,6.439797],[46.011973,6.439863],[46.012142,6.43997],[46.012238,6.440047],[46.012312,6.440115],[46.012392,6.440185],[46.012469,6.440243],[46.012517,6.440278],[46.012548,6.4403],[46.012646,6.44039],[46.012741,6.440478],[46.012853,6.440569],[46.012963,6.440653],[46.013057,6.440729],[46.013085,6.440758],[46.013187,6.44086],[46.013292,6.440958],[46.013555,6.441177],[46.013817,6.441396],[46.014079,6.441614],[46.014294,6.441697],[46.014362,6.441685],[46.014404,6.441613],[46.014663,6.441836],[46.014773,6.441945],[46.014862,6.442043],[46.014916,6.442109],[46.014957,6.442188],[46.014986,6.442258],[46.01501,6.442358],[46.015031,6.442474],[46.015042,6.442568],[46.015056,6.442638],[46.015076,6.442706],[46.015125,6.442832],[46.015143,6.442888],[46.015152,6.44294],[46.015171,6.443149],[46.015183,6.443237],[46.015196,6.443295],[46.015212,6.443333],[46.015226,6.443358],[46.015248,6.443383],[46.01531,6.443444],[46.015437,6.443544],[46.015561,6.443663],[46.015822,6.443949],[46.016064,6.444221],[46.016209,6.44438],[46.016291,6.444487],[46.016322,6.444542],[46.016369,6.444635],[46.016427,6.444778],[46.016484,6.444931],[46.016517,6.445022],[46.016546,6.445086],[46.016582,6.445148],[46.016645,6.445239],[46.016799,6.445445],[46.016891,6.445594],[46.016977,6.445738],[46.017043,6.445849],[46.017196,6.446103],[46.01731,6.446288],[46.017432,6.446464],[46.017532,6.446601],[46.017685,6.446796],[46.017796,6.446943],[46.017889,6.447085],[46.018056,6.447348],[46.01814,6.447499],[46.018201,6.447591],[46.018284,6.447693],[46.018505,6.44794],[46.0186,6.44805],[46.018717,6.448192],[46.018869,6.448368],[46.018996,6.448543],[46.019051,6.448597],[46.019228,6.448762],[46.019354,6.448888],[46.019399,6.448943],[46.019428,6.448988],[46.019457,6.449063],[46.01947,6.449099],[46.019484,6.44913]];
 
   function haversineM(lat1,lon1,lat2,lon2){
     var R=6371000, toRad=Math.PI/180;
@@ -133,55 +133,163 @@ h1{margin:2px 0 0;font-family:'Big Shoulders',sans-serif;font-weight:800;font-si
     var a=Math.sin(dphi/2)*Math.sin(dphi/2)+Math.cos(lat1*toRad)*Math.cos(lat2*toRad)*Math.sin(dl/2)*Math.sin(dl/2);
     return 2*R*Math.asin(Math.sqrt(a));
   }
+  function buildCumulative(points){
+    var cum=[0], total=0, i;
+    for(i=1;i<points.length;i++){ total+=haversineM(points[i-1][0],points[i-1][1],points[i][0],points[i][1]); cum.push(total); }
+    return {cum:cum,total:total};
+  }
+  // ---- recalage sur l'itineraire ----
+  // On ne sort pas du chemin : chaque point GPS est ramene sur le point le plus proche du trace
+  // officiel, et la distance parcourue est lue LE LONG du trace (pas en ligne droite entre deux
+  // points GPS). Apres un trou de reception, on repart du bon endroit sans "couper" la boucle, et
+  // un GPS decale de 30 m sur le cote n'ajoute plus de distance fantome.
+  var ROUTE_CUM = buildCumulative(TRACK);
+  var ROUTE_M = ROUTE_CUM.total;
+  var M_LAT = 111320, M_LON = 111320*Math.cos(TRACK[0][0]*Math.PI/180);
+  var ROUTE_XY = TRACK.map(function(p){ return [(p[1]-TRACK[0][1])*M_LON, (p[0]-TRACK[0][0])*M_LAT]; });
+  var SNAP_MAX_OFF_M = 80;   // plus loin que ca du chemin (ravito, rebond GPS) : point ignore
+  var SNAP_TIE_M = 25;       // portions du trace a peu pres aussi proches : on prend celle qui est devant
+  var MAX_SPEED_MS = 6;      // on ne peut pas avancer plus vite que ca le long du chemin
+
+  // Projection sur le trace. Pres du depart, le debut et la fin de la boucle sont a ~45 m l'un de
+  // l'autre : parmi les portions candidates, on garde celle qui est juste devant la position connue.
+  function snapForward(lat, lon, prevM){
+    var x=(lon-TRACK[0][1])*M_LON, y=(lat-TRACK[0][0])*M_LAT, cands=[], dmin=Infinity, i;
+    for(i=1;i<ROUTE_XY.length;i++){
+      var ax=ROUTE_XY[i-1][0], ay=ROUTE_XY[i-1][1], bx=ROUTE_XY[i][0], by=ROUTE_XY[i][1];
+      var vx=bx-ax, vy=by-ay, len2=vx*vx+vy*vy;
+      var f = len2>0 ? Math.max(0, Math.min(1, ((x-ax)*vx+(y-ay)*vy)/len2)) : 0;
+      var px=ax+f*vx, py=ay+f*vy, d=Math.sqrt((x-px)*(x-px)+(y-py)*(y-py));
+      var m=ROUTE_CUM.cum[i-1]+f*(ROUTE_CUM.cum[i]-ROUTE_CUM.cum[i-1]);
+      cands.push({d:d, m:m});
+      if(d<dmin) dmin=d;
+    }
+    var best=null;
+    cands.forEach(function(c){
+      if(c.d>dmin+SNAP_TIE_M) return;
+      var fwd=((c.m-prevM)%ROUTE_M+ROUTE_M)%ROUTE_M;
+      if(!best || fwd<best.fwd) best={fwd:fwd, d:dmin};
+    });
+    return best;
+  }
+  // Fait avancer la progression (en metres le long du trace, dans le tour en cours) avec un point.
+  // Renvoie la nouvelle progression, ou null si le point est a ignorer.
+  function advance(prevM, prevT, lat, lon, t){
+    var s=snapForward(lat, lon, prevM);
+    if(!s || s.d>SNAP_MAX_OFF_M) return null;
+    var fwd = s.fwd>ROUTE_M*0.8 ? 0 : s.fwd;  // leger recul du au bruit GPS : on reste sur place
+    if(fwd > 30+Math.max(0,t-prevT)/1000*MAX_SPEED_MS) return null; // saut impossible a pied
+    return Math.min(ROUTE_M, prevM+fwd);
+  }
+  // Progression le long du trace pour chaque point GPS du tour en cours (depuis le dernier tour).
+  function lapProgress(pts, anchorT){
+    var out=[], m=0, lastT=anchorT;
+    if(!anchorT) return out;
+    for(var i=0;i<pts.length;i++){
+      var p=pts[i];
+      if(p.t<anchorT) continue;
+      var nm=advance(m, lastT, p.lat, p.lon, p.t);
+      if(nm===null) continue;
+      m=nm; lastT=p.t;
+      out.push({t:p.t, m:m});
+    }
+    return out;
+  }
+  function computeProg(s){
+    var anchor = s.laps.length ? s.laps[s.laps.length-1].t : s.startedAt;
+    return lapProgress(s.track||[], anchor);
+  }
   function hybridKm(s){
-    var laps = s.laps.length;
-    var base = laps * s.cfg.loopKm;
-    var anchor = laps>0 ? s.laps[laps-1].t : s.startedAt;
-    if(!anchor) return base;
-    var pts = (s.track||[]).filter(function(p){ return p.t>=anchor; }).sort(function(a,b){ return a.t-b.t; });
-    var partialM=0;
-    for(var i=1;i<pts.length;i++){ partialM += haversineM(pts[i-1].lat,pts[i-1].lon,pts[i].lat,pts[i].lon); }
-    return base + partialM/1000;
+    var base = s.laps.length * s.cfg.loopKm;
+    var m = s.prog && s.prog.length ? s.prog[s.prog.length-1].m : 0;
+    return base + Math.min(m/ROUTE_M, 0.99)*s.cfg.loopKm;
+  }
+  function routePointAt(m){
+    m=Math.max(0, Math.min(ROUTE_M, m));
+    var lo=0, hi=ROUTE_CUM.cum.length-1;
+    while(hi-lo>1){ var mid=(lo+hi)>>1; if(ROUTE_CUM.cum[mid]<=m) lo=mid; else hi=mid; }
+    var seg=ROUTE_CUM.cum[hi]-ROUTE_CUM.cum[lo], f = seg>0 ? (m-ROUTE_CUM.cum[lo])/seg : 0;
+    return {idx:lo, ll:[TRACK[lo][0]+(TRACK[hi][0]-TRACK[lo][0])*f, TRACK[lo][1]+(TRACK[hi][1]-TRACK[lo][1])*f]};
+  }
+  function routeSliceTo(m){
+    var p=routePointAt(m);
+    return TRACK.slice(0, p.idx+1).concat([p.ll]);
+  }
+  // Progression a l'instant T, interpolee le long du trace entre deux points GPS.
+  function progAt(prog, T){
+    if(!prog.length || T<=prog[0].t) return 0;
+    var lo=0, hi=prog.length-1;
+    if(T>=prog[hi].t) return prog[hi].m;
+    while(hi-lo>1){ var mid=(lo+hi)>>1; if(prog[mid].t<=T) lo=mid; else hi=mid; }
+    var a=prog[lo], b=prog[hi];
+    return a.m+(b.m-a.m)*(T-a.t)/(b.t-a.t);
   }
 
-  var raceMap=null, mapTrackLine=null, mapMarker=null;
+  // Meme regle que coureur.html : les tours a moins de 5 min du precedent sont un seul passage
+  // (ex. tape a la main ET detecte par Termux).
+  var LAP_DEDUP_MS = 5*60*1000;
+  function normLaps(raw){
+    var sorted=(raw||[]).slice().sort(function(a,b){ return a.t-b.t; }), out=[];
+    sorted.forEach(function(l){
+      var last=out[out.length-1];
+      if(last && l.t-last.t<LAP_DEDUP_MS) return;
+      out.push(l);
+    });
+    return out;
+  }
+
+  // Trace GPS : documents "morceaux" ecrits par Termux (champ trackOf = id de la sortie).
+  var trackChunks={}, trackFor=null, trackUnsub=null;
+  function subscribeTrack(id){
+    if(trackFor===id) return;
+    if(trackUnsub){ trackUnsub(); trackUnsub=null; }
+    trackChunks={}; trackFor=id;
+    if(!id) return;
+    trackUnsub = sessionsRef.where('trackOf','==',id).onSnapshot(function(snap){
+      snap.docChanges().forEach(function(ch){
+        if(ch.type==='removed') delete trackChunks[ch.doc.id];
+        else trackChunks[ch.doc.id]=ch.doc.data().pts||[];
+      });
+      if(state){ state.track = allTrackPoints(state.legacyTrack); state.prog = computeProg(state); render(); }
+    }, function(){});
+  }
+  function allTrackPoints(legacy){
+    var pts=(legacy||[]).slice();
+    Object.keys(trackChunks).forEach(function(k){ Array.prototype.push.apply(pts, trackChunks[k]); });
+    pts.sort(function(a,b){ return a.t-b.t; });
+    return pts;
+  }
+
+  var raceMap=null, mapDoneLine=null, mapMarker=null;
   function ensureMap(){
     if(raceMap) return raceMap;
-    raceMap = L.map('race-map', {zoomControl:true});
+    raceMap = L.map('race-map', {zoomControl:true, preferCanvas:true});
     L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
       maxZoom:17, attribution:'&copy; OpenStreetMap contributors, SRTM | &copy; OpenTopoMap (CC-BY-SA)'
     }).addTo(raceMap);
     L.polyline(TRACK, {color:'#5B6660', weight:3, dashArray:'6,6', opacity:.7}).addTo(raceMap);
-    mapTrackLine = L.polyline([], {color:'#E1531F', weight:4}).addTo(raceMap);
-    mapMarker = L.circleMarker(TRACK[0], {radius:7, color:'#E1531F', fillColor:'#E1531F', fillOpacity:1}).addTo(raceMap);
+    mapDoneLine = L.polyline([], {color:'#E1531F', weight:5}).addTo(raceMap);
+    mapMarker = L.circleMarker(TRACK[0], {radius:8, color:'#FFFFFF', weight:2, fillColor:'#E1531F', fillOpacity:1}).addTo(raceMap);
     raceMap.fitBounds(L.latLngBounds(TRACK), {padding:[16,16]});
     setTimeout(function(){ raceMap.invalidateSize(); }, 50);
     return raceMap;
   }
-  var mapAnim=null, mapAnimRAF=null;
-  function animateMapMarker(now){
-    if(!mapAnim){ mapAnimRAF=null; return; }
-    var t=Math.min(1,(now-mapAnim.start)/mapAnim.duration);
-    var lat=mapAnim.from[0]+(mapAnim.to[0]-mapAnim.from[0])*t;
-    var lon=mapAnim.from[1]+(mapAnim.to[1]-mapAnim.from[1])*t;
-    mapMarker.setLatLng([lat,lon]);
-    if(t<1){ mapAnimRAF=requestAnimationFrame(animateMapMarker); } else { mapAnim=null; mapAnimRAF=null; }
+  // Trait et point sont tous deux calcules depuis la meme progression le long du trace : le trait
+  // s'arrete toujours exactement sous le point. Les points Termux arrivent par paquets toutes les
+  // ~10 s : on rejoue la progression avec 15 s de decalage, a vitesse reelle, pour que le point
+  // glisse le long du chemin au lieu de sauter.
+  var PLAYBACK_DELAY_MS = 15000;
+  function tickMap(){
+    if(!raceMap || !state || document.hidden) return;
+    if(!state.startedAt){ clearMap(); return; }
+    var m = progAt(state.prog||[], Date.now()-PLAYBACK_DELAY_MS);
+    mapDoneLine.setLatLngs(routeSliceTo(m));
+    mapMarker.setLatLng(routePointAt(m).ll);
   }
-  function renderMap(s){
-    if(!raceMap || !s) return;
-    var pts = (s.track||[]).slice().sort(function(a,b){ return a.t-b.t; }).map(function(p){ return [p.lat,p.lon]; });
-    mapTrackLine.setLatLngs(pts);
-    if(!pts.length) return;
-    var target = pts[pts.length-1];
-    var current = mapMarker.getLatLng();
-    if(current.lat===target[0] && current.lng===target[1]) return;
-    mapAnim = {from:[current.lat,current.lng], to:target, start:performance.now(), duration:15000};
-    if(!mapAnimRAF) mapAnimRAF=requestAnimationFrame(animateMapMarker);
-  }
+  setInterval(tickMap, 250);
   function clearMap(){
-    mapAnim=null;
     if(!raceMap) return;
-    mapTrackLine.setLatLngs([]);
+    mapDoneLine.setLatLngs([]);
     mapMarker.setLatLng(TRACK[0]);
   }
   ensureMap();
@@ -210,7 +318,9 @@ h1{margin:2px 0 0;font-family:'Big Shoulders',sans-serif;font-weight:800;font-si
     var targetPaceMs = s.cfg.raceDurationH*3600000/s.cfg.targetLaps;
     var deltaMs = effectiveLaps*targetPaceMs - elapsed;
     var projLaps=null, projKm=null;
-    if(n>0){ var avgPace=elapsed/n; projLaps=(s.cfg.raceDurationH*3600000)/avgPace; projKm=projLaps*s.cfg.loopKm; }
+    // compte aussi la partie deja faite du tour en cours (recalee sur le chemin) : sinon, au fil du
+    // tour, le temps avance mais pas le nombre de tours et la projection s'effondre a tort
+    if(n>0 && elapsed>0){ projLaps=effectiveLaps*(s.cfg.raceDurationH*3600000)/elapsed; projKm=projLaps*s.cfg.loopKm; }
     return {elapsed:elapsed, deltaMs:deltaMs, projLaps:projLaps, projKm:projKm};
   }
 
@@ -241,7 +351,6 @@ h1{margin:2px 0 0;font-family:'Big Shoulders',sans-serif;font-weight:800;font-si
     document.getElementById('hero-laps-target').textContent = s.cfg.targetLaps;
     var km = hybridKm(s);
     document.getElementById('hero-km').textContent = km.toFixed(1);
-    renderMap(s);
     document.getElementById('hero-km-target').textContent = s.cfg.targetKm;
     document.getElementById('hero-dplus').textContent = Math.round(s.laps.length*s.cfg.loopGainM);
     document.getElementById('hero-progress').style.width = Math.min(100,(s.laps.length/s.cfg.targetLaps)*100)+'%';
@@ -301,8 +410,10 @@ h1{margin:2px 0 0;font-family:'Big Shoulders',sans-serif;font-weight:800;font-si
       document.getElementById('pace-note').textContent="La course n'a pas encore commencé.";
     }
 
-    if(lastUpdatedAtMs){
-      var age = now - lastUpdatedAtMs;
+    var lastPt = s.track && s.track.length ? s.track[s.track.length-1].t : 0;
+    var lastSeen = Math.max(lastUpdatedAtMs||0, lastPt);
+    if(lastSeen){
+      var age = now - lastSeen;
       var fresh = age < 90000;
       document.getElementById('live-dot').className = 'live-dot'+(fresh?'':' stale');
       document.getElementById('freshness').textContent = fresh ? 'En direct' : ('Reçu il y a '+fmtDur(age));
@@ -312,19 +423,19 @@ h1{margin:2px 0 0;font-family:'Big Shoulders',sans-serif;font-weight:800;font-si
 
   sessionsRef.where('active','==',true).limit(1).onSnapshot(function(snap){
     if(snap.empty){
+      subscribeTrack(null);
       state = null;
       lastUpdatedAtMs = null;
       render();
       return;
     }
-    var data = snap.docs[0].data();
+    var doc = snap.docs[0], data = doc.data();
     lastUpdatedAtMs = data.updatedAt && data.updatedAt.toMillis ? data.updatedAt.toMillis() : Date.now();
-    document.getElementById('freshness').dataset.sessionName = data.name || '';
-    delete data.updatedAt;
-    delete data.name;
-    delete data.active;
-    delete data.createdAt;
-    state = data;
+    subscribeTrack(doc.id);
+    state = {cfg: data.cfg || {targetLaps:29,targetKm:100,loopKm:3.454,loopGainM:127,raceDurationH:24},
+             startedAt: data.startedAt || null, laps: normLaps(data.laps), legacyTrack: data.track || []};
+    state.track = allTrackPoints(state.legacyTrack);
+    state.prog = computeProg(state);
     render();
   }, function(err){
     document.getElementById('freshness').textContent = 'Connexion impossible';
