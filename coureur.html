@@ -942,7 +942,7 @@ a.suivi-link{color:var(--accent);font-weight:600;}
 
   document.getElementById('btn-start').addEventListener('click', function(){
     if(!state || !currentSessionId) return;
-    sessionDoc().update({startedAt: Date.now(), updatedAt: FV.serverTimestamp()}).catch(writeFailed);
+    sessionDoc().update({startedAt: Date.now(), startedAtServer: FV.serverTimestamp(), updatedAt: FV.serverTimestamp()}).catch(writeFailed);
   });
   document.getElementById('btn-lap').addEventListener('click', function(){ addLap('manuel'); });
 

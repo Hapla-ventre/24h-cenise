@@ -29,6 +29,7 @@
   --danger:#FF6B57; --danger-bg:#3A1E19; --shadow:0 1px 2px rgba(0,0,0,.35),0 8px 20px rgba(0,0,0,.4);
 }
 *{box-sizing:border-box;}
+[hidden]{display:none !important;}
 html,body{margin:0;}
 body{background:var(--bg);color:var(--ink);font-family:'IBM Plex Sans',system-ui,sans-serif;}
 .mono{font-family:'IBM Plex Mono',ui-monospace,monospace;font-variant-numeric:tabular-nums;}
@@ -47,6 +48,18 @@ body{background:var(--bg);color:var(--ink);font-family:'IBM Plex Sans',system-ui
 .replay-row input{flex:1;min-width:0;accent-color:var(--accent);}
 .replay-label{font-size:12px;color:var(--ink-dim);margin:6px 0 0;}
 .lap-row .best{color:var(--good);font-weight:600;}
+.lap-row{align-items:flex-start;}
+.lap-main{font-weight:600;}
+.lap-sub{font-size:12px;color:var(--ink-dim);margin-top:2px;}
+.lap-right{text-align:right;}
+.loop-intro{margin:0 0 12px;font-size:14px;line-height:1.45;}
+.loop-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:12px;}
+.loop-grid div{background:var(--surface-2);border-radius:10px;padding:8px 10px;display:flex;flex-direction:column;gap:2px;}
+.loop-grid .label{font-size:11px;color:var(--ink-dim);text-transform:uppercase;letter-spacing:.05em;}
+.loop-grid .value{font-size:16px;font-weight:600;}
+#loop-profile{width:100%;height:auto;display:block;}
+.loop-foot{font-size:13px;color:var(--ink-dim);margin:10px 0 0;line-height:1.5;}
+.loop-foot a{color:var(--accent);}
 h1{margin:2px 0 0;font-family:'Big Shoulders',sans-serif;font-weight:800;font-size:26px;line-height:1;}
 .hero-card{background:var(--surface);border:1px solid var(--line);border-radius:20px;padding:20px;box-shadow:var(--shadow);}
 .hero-main{display:flex;align-items:baseline;gap:8px;font-family:'Big Shoulders',sans-serif;}
@@ -129,9 +142,22 @@ h1{margin:2px 0 0;font-family:'Big Shoulders',sans-serif;font-weight:800;font-si
   </section>
 
   <section class="card">
-    <h3 id="laps-title">Derniers tours</h3>
+    <h3 id="laps-title">Tours effectués</h3>
     <div id="lap-list"></div>
     <p class="empty-note" id="lap-empty">Aucun tour pour l'instant.</p>
+  </section>
+
+  <section class="card">
+    <h3>La boucle</h3>
+    <p class="loop-intro">Une boucle de 3,45 km au col de Cénise (Haute-Savoie), à répéter pendant 24 h. Objectif : 29 tours, soit 100 km.</p>
+    <div class="loop-grid">
+      <div><span class="label">Distance</span><span class="value mono">3,454 km</span></div>
+      <div><span class="label">Dénivelé</span><span class="value mono">+127 / −127 m</span></div>
+      <div><span class="label">Altitude</span><span class="value mono">1676–1774 m</span></div>
+      <div><span class="label">Départ</span><span class="value mono">1 725 m</span></div>
+    </div>
+    <svg id="loop-profile" viewBox="0 0 320 110" role="img" aria-label="Profil d'altitude de la boucle"></svg>
+    <p class="loop-foot">Départ : <span class="mono">46.019485, 6.449133</span> (46°01′10″ N, 6°26′57″ E) · <a href="https://www.google.com/maps?q=46.019485,6.449133" target="_blank" rel="noopener">ouvrir dans Google Maps</a><br>29 tours = 100,2 km et 3 690 m de dénivelé positif.</p>
   </section>
 </div>
 
@@ -366,6 +392,7 @@ h1{margin:2px 0 0;font-family:'Big Shoulders',sans-serif;font-weight:800;font-si
     var m = Math.min(ROUTE_M, progAt(f.lapProgs[done]||[], T));
     mapDoneLine.setLatLngs(done ? routeSliceTo(ROUTE_M + Math.min(m, ROUTE_M-1)) : routeSliceTo(m));
     mapMarker.setLatLng(routePointAt(m).ll);
+    if(profileDot) profileDot.__pos(m);
     if(replay.frac<1){
       var km = done*s.cfg.loopKm + Math.min(m/ROUTE_M, 0.99)*s.cfg.loopKm;
       document.getElementById('hero-laps').textContent = done;
@@ -414,9 +441,11 @@ h1{margin:2px 0 0;font-family:'Big Shoulders',sans-serif;font-weight:800;font-si
     var m = progAt(state.prog||[], Date.now()-remotePlaybackDelay());
     mapDoneLine.setLatLngs(routeSliceTo(m));
     mapMarker.setLatLng(routePointAt(m).ll);
+    if(profileDot) profileDot.__pos(m>ROUTE_M ? m-ROUTE_M : m);
   }
   setInterval(tickMap, 250);
   function clearMap(){
+    if(profileDot) profileDot.style.display='none';
     if(!raceMap) return;
     mapDoneLine.setLatLngs([]);
     mapMarker.setLatLng(TRACK[0]);
@@ -440,9 +469,61 @@ h1{margin:2px 0 0;font-family:'Big Shoulders',sans-serif;font-weight:800;font-si
   var state = null;
   var lastUpdatedAtMs = null;
 
+  // Horloge : l'appareil du suiveur peut avoir quelques secondes, voire dizaines de secondes,
+  // d'ecart avec l'heure reelle. On se cale sur l'heure du serveur de la page (en-tete Date).
+  var clockOffset = 0;
+  function syncClock(){
+    var t0=Date.now();
+    fetch(location.pathname+'?horloge='+t0, {method:'HEAD', cache:'no-store'}).then(function(r){
+      var d=Date.parse(r.headers.get('Date')||''); if(!d) return;
+      var t1=Date.now();
+      clockOffset = d + 500 - (t0+t1)/2; // en-tete a la seconde pres : +0,5 s en moyenne
+    }).catch(function(){});
+  }
+  syncClock(); setInterval(syncClock, 10*60*1000);
+  function nowTrue(){ return Date.now()+clockOffset; }
+  // Depart : heure du serveur au moment du "Demarrer" (independante de l'horloge du telephone du
+  // coureur) ; si le depart a ete donne hors ligne, elle n'est pas fiable et on garde celle du telephone.
+  function clockStartOf(data){
+    var srv = data.startedAtServer && data.startedAtServer.toMillis ? data.startedAtServer.toMillis() : null;
+    return (srv && data.startedAt && Math.abs(srv-data.startedAt)<60000) ? srv : (data.startedAt||null);
+  }
+
+  // Profil d'altitude de la boucle (tous les ~50 m), avec la position du coureur
+  var PROFILE = [1725.0, 1723.4, 1723.9, 1724.0, 1724.8, 1726.5, 1727.9, 1729.8, 1732.1, 1733.6, 1737.7, 1742.9, 1744.9, 1743.2, 1741.8, 1743.4, 1741.0, 1739.4, 1743.0, 1750.6, 1756.2, 1760.7, 1767.5, 1770.5, 1768.9, 1771.7, 1767.3, 1746.7, 1731.6, 1729.2, 1728.0, 1726.0, 1720.3, 1717.7, 1714.8, 1712.2, 1712.1, 1711.0, 1709.3, 1707.1, 1703.5, 1697.7, 1691.4, 1684.1, 1676.5, 1677.7, 1679.7, 1681.4, 1683.6, 1683.9, 1684.6, 1684.7, 1684.1, 1684.4, 1686.9, 1689.9, 1690.4, 1688.5, 1688.4, 1689.5, 1693.4, 1700.4, 1705.1, 1709.0, 1711.4, 1714.4, 1718.8, 1721.8, 1722.7, 1722.7, 1724.9];
+  var profileDot = null;
+  (function drawProfile(){
+    var svg=document.getElementById('loop-profile'), ns='http://www.w3.org/2000/svg';
+    var W=320, H=110, padL=34, padR=6, padT=8, padB=18;
+    var lo=1670, hi=1780, n=PROFILE.length;
+    function X(i){ return padL + i/(n-1)*(W-padL-padR); }
+    function Y(e){ return padT + (hi-e)/(hi-lo)*(H-padT-padB); }
+    var line=PROFILE.map(function(e,i){ return X(i).toFixed(1)+','+Y(e).toFixed(1); }).join(' ');
+    function el(tag, attrs, text){ var e=document.createElementNS(ns,tag); for(var k in attrs){ if(k==='fill'||k==='stroke') e.style[k]=attrs[k]; else e.setAttribute(k,attrs[k]); } if(text) e.textContent=text; svg.appendChild(e); return e; }
+    [1680,1720,1760].forEach(function(a){
+      el('line',{x1:padL,x2:W-padR,y1:Y(a),y2:Y(a),stroke:'var(--line)','stroke-width':1});
+      el('text',{x:padL-4,y:Y(a)+3,'text-anchor':'end','font-size':9,fill:'var(--ink-dim)'},a+' m');
+    });
+    el('polygon',{points:X(0)+','+(H-padB)+' '+line+' '+X(n-1)+','+(H-padB),fill:'var(--accent)','fill-opacity':.15});
+    el('polyline',{points:line,fill:'none',stroke:'var(--accent)','stroke-width':2,'stroke-linejoin':'round'});
+    el('text',{x:padL,y:H-4,'font-size':9,fill:'var(--ink-dim)'},'départ');
+    el('text',{x:W-padR,y:H-4,'text-anchor':'end','font-size':9,fill:'var(--ink-dim)'},'3,45 km');
+    profileDot = el('circle',{r:4.5,fill:'var(--accent)',stroke:'#fff','stroke-width':1.5,cx:X(0),cy:Y(PROFILE[0])});
+    profileDot.style.display='none';
+    profileDot.__pos = function(m){
+      var f=Math.max(0,Math.min(1,m/ROUTE_M))*(n-1), i=Math.floor(f), g=f-i;
+      var e=PROFILE[i]+(PROFILE[Math.min(i+1,n-1)]-PROFILE[i])*g;
+      profileDot.setAttribute('cx',X(f)); profileDot.setAttribute('cy',Y(e));
+      profileDot.style.display='';
+    };
+  })();
+
   function paceInfo(s, now){
     if(!s.startedAt) return null;
-    var elapsed=now-s.startedAt, n=s.laps.length;
+    var dataT = s.startedAt;
+    if(s.laps.length) dataT = Math.max(dataT, s.laps[s.laps.length-1].t);
+    if(s.prog && s.prog.length) dataT = Math.max(dataT, s.prog[s.prog.length-1].t);
+    var elapsed=dataT-s.startedAt, n=s.laps.length;
     var effectiveLaps = hybridKm(s) / s.cfg.loopKm; // credite la progression GPS dans le tour en cours, pas juste les tours complets
     var targetPaceMs = s.cfg.raceDurationH*3600000/s.cfg.targetLaps;
     var deltaMs = effectiveLaps*targetPaceMs - elapsed;
@@ -458,7 +539,7 @@ h1{margin:2px 0 0;font-family:'Big Shoulders',sans-serif;font-weight:800;font-si
     document.getElementById('finish-banner').hidden = !fin;
     document.getElementById('replay-row').hidden = !fin;
     document.getElementById('map-title').textContent = fin ? 'Parcours de la course' : 'Position en direct';
-    document.getElementById('laps-title').textContent = fin ? 'Tous les tours' : 'Derniers tours';
+    document.getElementById('laps-title').textContent = 'Tours effectués';
     document.getElementById('clock-l1').textContent = fin ? 'Durée' : 'Écoulé';
     document.getElementById('clock-l2').textContent = fin ? 'Départ' : 'Restant';
     document.getElementById('clock-l3').textContent = fin ? 'Arrivée' : 'Fin prévue';
@@ -513,15 +594,17 @@ h1{margin:2px 0 0;font-family:'Big Shoulders',sans-serif;font-weight:800;font-si
     list.innerHTML='';
     document.getElementById('lap-empty').hidden = s.laps.length>0;
     var bestDur = durations.length ? Math.min.apply(null, durations) : null;
-    s.laps.map(function(l,idx){ return {l:l, num:idx+1, dur:durations[idx]}; }).slice(s.final ? 0 : -8).reverse().forEach(function(item){
+    s.laps.map(function(l,idx){ return {l:l, num:idx+1, dur:durations[idx]}; }).reverse().forEach(function(item){
       var row=document.createElement('div');
       row.className='lap-row';
-      if(s.final){
-        var best = item.dur===bestDur && durations.length>1;
-        row.innerHTML='<span>Tour '+item.num+(best ? ' <span class="best">★ meilleur</span>' : '')+'</span><span class="mono">'+fmtDur(item.dur)+' · '+fmtTime(item.l.t)+'</span>';
-      } else {
-        row.innerHTML='<span>Tour '+item.num+'</span><span class="mono">'+fmtTime(item.l.t)+'</span>';
-      }
+      var best = item.dur===bestDur && durations.length>1;
+      var kmh = s.cfg.loopKm/(item.dur/3600000);
+      var paceS = Math.round(item.dur/1000/s.cfg.loopKm);
+      var pace = Math.floor(paceS/60)+':'+String(paceS%60).padStart(2,'0')+' /km';
+      row.innerHTML='<div><div class="lap-main">Tour '+item.num+(best ? ' <span class="best">★ meilleur</span>' : '')+'</div>'
+        +'<div class="lap-sub">bouclé à '+fmtTime(item.l.t)+'</div></div>'
+        +'<div class="lap-right"><div class="lap-main mono">'+fmtDur(item.dur)+'</div>'
+        +'<div class="lap-sub mono">'+kmh.toFixed(1).replace('.',',')+' km/h · '+pace+'</div></div>';
       list.appendChild(row);
     });
     if(s.final){
@@ -553,11 +636,11 @@ h1{margin:2px 0 0;font-family:'Big Shoulders',sans-serif;font-weight:800;font-si
       return;
     }
     if(s.startedAt){
-      var elapsed=now-s.startedAt;
+      var start=s.clockStart||s.startedAt, elapsed=nowTrue()-start;
       var remaining=s.cfg.raceDurationH*3600000-elapsed;
       document.getElementById('clock-elapsed').textContent=fmtClock(elapsed);
       document.getElementById('clock-remaining').textContent= remaining>0?fmtClock(remaining):'00:00:00';
-      document.getElementById('clock-end').textContent=fmtTime(s.startedAt+s.cfg.raceDurationH*3600000);
+      document.getElementById('clock-end').textContent=fmtTime(start+s.cfg.raceDurationH*3600000);
       var pi=paceInfo(s, now);
       var pill=document.getElementById('pace-pill');
       pill.className='pace-pill '+(pi.deltaMs>=0?'is-good':'is-behind');
@@ -643,7 +726,7 @@ h1{margin:2px 0 0;font-family:'Big Shoulders',sans-serif;font-weight:800;font-si
     lastUpdatedAtMs = data.updatedAt && data.updatedAt.toMillis ? data.updatedAt.toMillis() : Date.now();
     subscribeTrack(doc.id);
     state = {cfg: data.cfg || {targetLaps:29,targetKm:100,loopKm:3.454,loopGainM:127,raceDurationH:24},
-             startedAt: data.startedAt || null, legacyTrack: data.track || []};
+             startedAt: data.startedAt || null, clockStart: clockStartOf(data), legacyTrack: data.track || []};
     // un tour avant le depart (echauffement, test) ne compte pas
     state.laps = normLaps((data.laps||[]).filter(function(l){ return state.startedAt && l.t>=state.startedAt; }));
     state.track = allTrackPoints(state.legacyTrack);
