@@ -4,8 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Col de Cénise 24h — Suivi</title>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders:wght@600;700;800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders:wght@600;700;800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="vendor/leaflet.css">
 <style>
 :root{
   --bg:#F5F3EC; --surface:#FFFFFF; --surface-2:#EDEAE0; --ink:#1C2321; --ink-dim:#5B6660;
@@ -108,9 +108,9 @@ h1{margin:2px 0 0;font-family:'Big Shoulders',sans-serif;font-weight:800;font-si
   </section>
 </div>
 
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="vendor/firebase-app-compat.js"></script>
+<script src="vendor/firebase-firestore-compat.js"></script>
+<script src="vendor/leaflet.js"></script>
 <script>
 (function(){
   var FIREBASE_CONFIG = {
@@ -266,6 +266,10 @@ h1{margin:2px 0 0;font-family:'Big Shoulders',sans-serif;font-weight:800;font-si
     raceMap = L.map('race-map', {zoomControl:true, preferCanvas:true});
     L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
       maxZoom:17, attribution:'&copy; OpenStreetMap contributors, SRTM | &copy; OpenTopoMap (CC-BY-SA)'
+    }).addTo(raceMap);
+    // copie locale des fonds de carte autour de la boucle (zooms 12 a 17) : la carte s'affiche sans reseau
+    L.tileLayer('tiles/{z}/{x}/{y}.png', {
+      minZoom:12, maxZoom:17, bounds:L.latLngBounds([[46.0056,6.4350],[46.0225,6.4532]])
     }).addTo(raceMap);
     L.polyline(TRACK, {color:'#5B6660', weight:3, dashArray:'6,6', opacity:.7}).addTo(raceMap);
     mapDoneLine = L.polyline([], {color:'#E1531F', weight:5}).addTo(raceMap);

@@ -4,8 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Col de Cénise 24h — Coureur</title>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders:wght@600;700;800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders:wght@600;700;800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="vendor/leaflet.css">
 <style>
 :root{
   --bg:#F5F3EC; --surface:#FFFFFF; --surface-2:#EDEAE0; --ink:#1C2321; --ink-dim:#5B6660;
@@ -107,6 +107,7 @@ a.suivi-link{color:var(--accent);font-weight:600;}
   </header>
 
   <main class="main">
+    <p class="fine-print" id="online-only-notice" hidden>Tu es sur la version en ligne : elle a besoin du réseau. Pour courir sans réseau, lance Termux puis ouvre <b>http://localhost:8765/coureur.html</b> (voir « Tours automatiques en fond » en bas).</p>
     <section class="replay-block" id="session-manager">
       <h3>Sorties</h3>
       <p class="fine-print" id="no-session-notice">Aucune sortie active. Crée une nouvelle sortie pour commencer à enregistrer et diffuser en direct sur le lien de suivi.</p>
@@ -211,7 +212,7 @@ a.suivi-link{color:var(--accent);font-weight:600;}
 
     <section class="replay-block" id="setup-card">
       <h3>Tours automatiques en fond (Termux)</h3>
-      <p class="fine-print">Installe Termux + Termux:API (F-Droid). Dans les réglages Android : Termux:API → Autorisations → Position → <b>Toujours autoriser</b>, et Termux + Termux:API → Batterie → <b>Sans restriction</b>. Ouvre Termux, colle cette commande en une fois : elle installe ce qu'il faut, télécharge la dernière version du script et le lance. Il tourne en silence, même écran éteint, mais seulement pendant qu'une sortie est active : il envoie ta position GPS en continu (un point toutes les ~5 s, par paquets toutes les 10 s) et compte le tour dès que tu passes à moins de 30 m du départ. Si tu as déjà tapé le tour à la main, il ne le recompte pas (et inversement). À recoller après chaque mise à jour de l'appli.</p>
+      <p class="fine-print">Installe Termux + Termux:API (F-Droid). Dans les réglages Android : Termux:API → Autorisations → Position → <b>Toujours autoriser</b>, et Termux + Termux:API → Batterie → <b>Sans restriction</b>. Avec du réseau, ouvre Termux et colle cette commande en une fois : elle installe l'appli complète sur le téléphone et la lance. Ensuite, ouvre <b>http://localhost:8765/coureur.html</b> dans Chrome (Menu ⋮ → Ajouter à l'écran d'accueil) : c'est ta version coureur, <b>elle marche sans réseau</b> tant que Termux tourne. Termux enregistre ta position en continu (~5 s), compte le tour dès que tu passes à moins de 30 m du départ, et envoie tout au suivi dès qu'il y a du réseau — sans réseau, tout est gardé sur le téléphone et part plus tard. Pour relancer Termux plus tard (même sans réseau) : <code>python3 ~/24h-cenise-main/reveil-tour.py</code>. À recoller après chaque mise à jour de l'appli.</p>
       <div class="replay-controls">
         <button type="button" id="btn-copy-setup">Copier la commande d'installation</button>
       </div>
@@ -237,9 +238,9 @@ a.suivi-link{color:var(--accent);font-weight:600;}
   <div class="toast" id="toast" hidden></div>
 </div>
 
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="vendor/firebase-app-compat.js"></script>
+<script src="vendor/firebase-firestore-compat.js"></script>
+<script src="vendor/leaflet.js"></script>
 <script>
 (function(){
   var FIREBASE_CONFIG = {
@@ -396,10 +397,56 @@ a.suivi-link{color:var(--accent);font-weight:600;}
     trackChunks={}; trackFor=null;
   }
   function allTrackPoints(legacy){
-    var pts=(legacy||[]).slice();
-    Object.keys(trackChunks).forEach(function(k){ Array.prototype.push.apply(pts, trackChunks[k]); });
-    pts.sort(function(a,b){ return a.t-b.t; });
-    return pts;
+    var byT={};
+    (legacy||[]).forEach(function(p){ byT[p.t]=p; });
+    Object.keys(trackChunks).forEach(function(k){ trackChunks[k].forEach(function(p){ byT[p.t]=p; }); });
+    if(localPtsFor && localPtsFor===trackFor) Object.keys(localPts).forEach(function(k){ byT[k]=localPts[k]; });
+    return Object.keys(byT).map(function(k){ return byT[k]; }).sort(function(a,b){ return a.t-b.t; });
+  }
+
+  // ---- liaison directe avec Termux (appli ouverte depuis http://localhost:8765) ----
+  // Termux sert cette page et donne positions et tours en direct, sans passer par internet :
+  // tout marche sans reseau. Le suivi recoit tout des que le reseau revient.
+  var LOCAL_API = /^(localhost|127\.0\.0\.1)$/.test(location.hostname);
+  document.getElementById('online-only-notice').hidden = LOCAL_API;
+  var localPts={}, localPtsFor=null, localSince=0, termuxLocal=null;
+  function pollLocal(){
+    if(!LOCAL_API) return; // meme page cachee : c'est elle qui dit a Termux quelle sortie suivre
+    if(localPtsFor!==currentSessionId){ localPts={}; localPtsFor=currentSessionId; localSince=0; }
+    var sid=currentSessionId||'';
+    fetch('/api/live?session='+encodeURIComponent(sid)+'&since='+localSince, {cache:'no-store'})
+      .then(function(r){ return r.json(); })
+      .then(function(d){
+        termuxLocal={t:Date.now(), online:d.online, pendingPts:d.pendingPts, pendingLaps:d.pendingLaps};
+        if(!currentSessionId || sid!==currentSessionId || d.session!==currentSessionId) return;
+        d.points.forEach(function(p){ localPts[p.t]=p; if(p.t>localSince) localSince=p.t; });
+        importTermuxLaps(d.laps);
+        if(d.points.length && state){
+          state.track = allTrackPoints(state.legacyTrack);
+          state.prog = computeProg(state);
+          render(state);
+        }
+      })
+      .catch(function(){ termuxLocal=null; });
+  }
+  setInterval(pollLocal, 2000);
+  // Un tour detecte par Termux est ajoute a la sortie depuis ici aussi : il s'affiche tout de
+  // suite meme sans reseau. Meme objet que celui ecrit par Termux ({t, source:'termux'}) : quand
+  // les deux ecritures arrivent a Firestore, il n'y a qu'un seul tour. Chaque tour n'est importe
+  // qu'une fois, pour qu'un tour annule avec "↩︎" ne revienne pas.
+  function importTermuxLaps(ts){
+    if(!state || !state.startedAt || !ts.length) return;
+    var key='ck-termux-imported-'+currentSessionId, done=[];
+    try{ done=JSON.parse(localStorage.getItem(key)||'[]'); }catch(e){}
+    var changed=false;
+    ts.forEach(function(t){
+      if(done.indexOf(t)>=0) return;
+      done.push(t); changed=true;
+      if(t<state.startedAt) return;
+      var known = state.rawLaps.some(function(l){ return l.t===t && l.source==='termux'; });
+      if(!known) sessionDoc().update({laps: FV.arrayUnion({t:t, source:'termux'}), updatedAt: FV.serverTimestamp()}).catch(function(){});
+    });
+    if(changed){ try{ localStorage.setItem(key, JSON.stringify(done)); }catch(e){} }
   }
 
   var raceMap=null, mapDoneLine=null, mapMarker=null;
@@ -408,6 +455,10 @@ a.suivi-link{color:var(--accent);font-weight:600;}
     raceMap = L.map('race-map', {zoomControl:true, preferCanvas:true});
     L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
       maxZoom:17, attribution:'&copy; OpenStreetMap contributors, SRTM | &copy; OpenTopoMap (CC-BY-SA)'
+    }).addTo(raceMap);
+    // copie locale des fonds de carte autour de la boucle (zooms 12 a 17) : la carte s'affiche sans reseau
+    L.tileLayer('tiles/{z}/{x}/{y}.png', {
+      minZoom:12, maxZoom:17, bounds:L.latLngBounds([[46.0056,6.4350],[46.0225,6.4532]])
     }).addTo(raceMap);
     L.polyline(TRACK, {color:'#5B6660', weight:3, dashArray:'6,6', opacity:.7}).addTo(raceMap);
     mapDoneLine = L.polyline([], {color:'#E1531F', weight:5}).addTo(raceMap);
@@ -420,6 +471,7 @@ a.suivi-link{color:var(--accent);font-weight:600;}
   // ~10 s : on rejoue la progression avec 15 s de decalage, a vitesse reelle, pour que le point
   // glisse le long du chemin au lieu de sauter.
   var PLAYBACK_DELAY_MS = 15000;
+  function playbackDelay(){ return termuxLocal && Date.now()-termuxLocal.t<6000 ? 6000 : PLAYBACK_DELAY_MS; }
   var localFix = null; // position du telephone vue par le navigateur (ecran allume), en temps reel
   function tickMap(){
     if(!raceMap || !state || document.hidden || document.getElementById('panel-carte').hidden) return;
@@ -428,7 +480,7 @@ a.suivi-link{color:var(--accent);font-weight:600;}
     var last = prog.length ? prog[prog.length-1] : {t:(state.laps.length ? state.laps[state.laps.length-1].t : state.startedAt), m:0};
     // ecran allume : on avance depuis la derniere position Termux avec le GPS du telephone
     var liveM = localFix && now-localFix.t<15000 ? advance(last.m, last.t, localFix.lat, localFix.lon, localFix.t) : null;
-    var m = liveM!==null ? liveM : progAt(prog, now-PLAYBACK_DELAY_MS);
+    var m = liveM!==null ? liveM : progAt(prog, now-playbackDelay());
     mapDoneLine.setLatLngs(routeSliceTo(m));
     mapMarker.setLatLng(routePointAt(m).ll);
   }
@@ -566,6 +618,9 @@ a.suivi-link{color:var(--accent);font-weight:600;}
   }
   function hideToast(){ document.getElementById('toast').hidden=true; clearTimeout(toastTimer); }
 
+  var FV = firebase.firestore.FieldValue;
+  function writeFailed(){ toast('Écriture refusée par Firestore — réessaie.'); }
+
   // ---- session manager ----
   function showSessionUI(has){
     document.getElementById('race-ui').hidden = !has;
@@ -611,27 +666,29 @@ a.suivi-link{color:var(--accent);font-weight:600;}
 
   function deleteSession(id, label){
     if(!window.confirm('Supprimer définitivement "'+label+'" ? Cette action est irréversible.')) return;
-    sessionsRef.where('trackOf','==',id).get().then(function(snap){
+    sessionsRef.where('trackOf','==',id).get().catch(function(){ return null; }).then(function(snap){
       var batches=[], batch=db.batch(), n=0;
-      snap.forEach(function(d){ batch.delete(d.ref); if(++n%400===0){ batches.push(batch); batch=db.batch(); } });
+      if(snap) snap.forEach(function(d){ batch.delete(d.ref); if(++n%400===0){ batches.push(batch); batch=db.batch(); } });
       batch.delete(sessionsRef.doc(id)); batches.push(batch);
-      return Promise.all(batches.map(function(b){ return b.commit(); }));
-    }).then(function(){
+      batches.forEach(function(b){ b.commit().catch(writeFailed); });
       if(id===currentSessionId){
         unsubscribeSession();
         currentSessionId=null; state=null; saveLocalCache(); showSessionUI(false); clearMap();
       }
       loadSessionsList();
-    }).catch(function(){ toast('Impossible de supprimer (réseau ?)'); });
+    });
   }
 
-  function deactivateAllThenSet(newRef, newData){
-    return sessionsRef.where('active','==',true).get().then(function(snap){
+  // Hors ligne, une ecriture Firestore n'est confirmee qu'au retour du reseau : on n'attend jamais
+  // cette confirmation pour avancer (l'ecriture est deja appliquee sur le telephone et partira seule).
+  function deactivateOthersAnd(ref, apply){
+    function commit(snap){
       var batch=db.batch();
-      snap.forEach(function(d){ if(d.id!==newRef.id) batch.update(d.ref, {active:false}); });
-      batch.set(newRef, newData);
-      return batch.commit();
-    });
+      if(snap) snap.forEach(function(d){ if(d.id!==ref.id) batch.update(d.ref, {active:false}); });
+      apply(batch);
+      batch.commit().catch(writeFailed);
+    }
+    return sessionsRef.where('active','==',true).get().then(commit, function(){ commit(null); });
   }
 
   function applyLoadedSession(id, d){
@@ -659,33 +716,33 @@ a.suivi-link{color:var(--accent);font-weight:600;}
       laps: [],
       updatedAt: firebase.firestore.FieldValue.serverTimestamp()
     };
-    deactivateAllThenSet(ref, data).then(function(){
+    deactivateOthersAnd(ref, function(batch){ batch.set(ref, data); }).then(function(){
       applyLoadedSession(ref.id, data);
-    }).catch(function(){ toast('Impossible de créer la sortie (réseau ?)'); });
+    });
   }
 
   function resumeSession(id){
     sessionsRef.doc(id).get().then(function(doc){
       if(!doc.exists) return;
       var d = doc.data();
-      var updated = Object.assign({}, d, {active:true, updatedAt: firebase.firestore.FieldValue.serverTimestamp()});
-      deactivateAllThenSet(doc.ref, updated).then(function(){
+      deactivateOthersAnd(doc.ref, function(batch){
+        batch.update(doc.ref, {active:true, updatedAt: firebase.firestore.FieldValue.serverTimestamp()});
+      }).then(function(){
         applyLoadedSession(id, d);
       });
-    }).catch(function(){ toast('Impossible de reprendre cette sortie (réseau ?)'); });
+    }).catch(function(){ toast('Sortie introuvable sur ce téléphone (jamais ouverte ici, et pas de réseau).'); });
   }
 
   function endCurrentSession(){
     if(!currentSessionId) return;
-    sessionsRef.doc(currentSessionId).update({active:false, updatedAt: firebase.firestore.FieldValue.serverTimestamp()}).then(function(){
-      unsubscribeSession();
-      currentSessionId = null;
-      state = null;
-      saveLocalCache();
-      showSessionUI(false);
-      clearMap();
-      loadSessionsList();
-    }).catch(function(){ toast('Impossible de terminer la sortie (réseau ?)'); });
+    sessionsRef.doc(currentSessionId).update({active:false, updatedAt: firebase.firestore.FieldValue.serverTimestamp()}).catch(writeFailed);
+    unsubscribeSession();
+    currentSessionId = null;
+    state = null;
+    saveLocalCache();
+    showSessionUI(false);
+    clearMap();
+    loadSessionsList();
   }
 
   document.getElementById('btn-new-session').addEventListener('click', createNewSession);
@@ -694,8 +751,6 @@ a.suivi-link{color:var(--accent);font-weight:600;}
   // ---- race logic ----
   // Pas de mise a jour locale a la main : avec la persistance Firestore, l'ecouteur de la sortie
   // voit l'ecriture tout de suite (meme hors ligne) et re-affiche.
-  var FV = firebase.firestore.FieldValue;
-  function writeFailed(){ toast('Écriture refusée — réessaie.'); }
   function addLap(source){
     if(!state || !state.startedAt || !currentSessionId) return;
     var now=Date.now(), last=state.laps[state.laps.length-1];
@@ -777,13 +832,19 @@ a.suivi-link{color:var(--accent);font-weight:600;}
     var now=Date.now(), s=state;
     if(!s) return;
     var lastPt = s.track.length ? s.track[s.track.length-1] : null;
-    var ageEl = document.getElementById('gps-age');
-    if(!lastPt){ ageEl.textContent = s.startedAt ? '· GPS Termux : rien reçu' : ''; ageEl.className='gps-age is-stale'; }
+    var ageEl = document.getElementById('gps-age'), txt, stale;
+    if(LOCAL_API && (!termuxLocal || now-termuxLocal.t>6000)){ txt='· Termux ne répond pas'; stale=true; }
+    else if(!lastPt){ txt = s.startedAt ? '· GPS Termux : rien reçu' : ''; stale=true; }
     else {
       var age = now-lastPt.t;
-      ageEl.textContent = '· GPS il y a '+(age<60000 ? Math.round(age/1000)+' s' : fmtDur(age));
-      ageEl.className = 'gps-age'+(age>60000 ? ' is-stale' : '');
+      txt = '· GPS il y a '+(age<60000 ? Math.round(age/1000)+' s' : fmtDur(age));
+      stale = age>60000;
     }
+    if(LOCAL_API && termuxLocal && now-termuxLocal.t<=6000 && (termuxLocal.pendingPts>0 || termuxLocal.pendingLaps>0) && !termuxLocal.online){
+      txt += ' · '+termuxLocal.pendingPts+' positions'+(termuxLocal.pendingLaps ? ' et '+termuxLocal.pendingLaps+' tour(s)' : '')+' en attente de réseau';
+    }
+    ageEl.textContent = txt;
+    ageEl.className = 'gps-age'+(stale ? ' is-stale' : '');
     if(s.startedAt){
       var elapsed=now-s.startedAt;
       var remaining=s.cfg.raceDurationH*3600000-elapsed;
@@ -872,9 +933,9 @@ a.suivi-link{color:var(--accent);font-weight:600;}
 
   // Le script est servi a cote de cette page : une seule source de verite, pas de copie a tenir a jour.
   var TERMUX_SETUP_CMD = [
-    'pkg update -y && pkg install -y python termux-api curl',
-    'curl -fsSL https://hapla-ventre.github.io/24h-cenise/reveil-tour.py -o reveil-tour.py',
-    'python3 reveil-tour.py'
+    'pkg update -y && pkg install -y python termux-api curl tar',
+    'cd ~ && rm -rf 24h-cenise-main && curl -fsSL https://github.com/Hapla-ventre/24h-cenise/archive/refs/heads/main.tar.gz | tar xz',
+    'python3 ~/24h-cenise-main/reveil-tour.py'
   ].join('\n');
 
   function showSetupFallback(){
