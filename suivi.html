@@ -520,11 +520,18 @@ h1{margin:2px 0 0;font-family:'Big Shoulders',sans-serif;font-weight:800;font-si
 
   function paceInfo(s, now){
     if(!s.startedAt) return null;
-    var dataT = s.startedAt;
-    if(s.laps.length) dataT = Math.max(dataT, s.laps[s.laps.length-1].t);
-    if(s.prog && s.prog.length) dataT = Math.max(dataT, s.prog[s.prog.length-1].t);
-    var elapsed=dataT-s.startedAt, n=s.laps.length;
-    var effectiveLaps = hybridKm(s) / s.cfg.loopKm; // credite la progression GPS dans le tour en cours, pas juste les tours complets
+    // Evalue a l'heure actuelle, comme sur le telephone du coureur. Les positions arrivent par
+    // paquets (jusqu'a ~10 s de retard) : on prolonge la derniere position connue a la vitesse du
+    // moment, sur 20 s au plus. Coureur arrete ou loin du chemin : pas de progression, le retard
+    // augmente normalement.
+    var T = Math.max(s.startedAt, nowTrue()), n=s.laps.length, lapsAtT=n, partial=0;
+    var last = s.prog && s.prog.length ? s.prog[s.prog.length-1] : null;
+    if(last){
+      var ahead = Math.max(0, Math.min(20000, T-last.t));
+      partial = Math.min((last.m + (last.v||0)*ahead/1000)/ROUTE_M, 0.99);
+    }
+    var elapsed=T-s.startedAt;
+    var effectiveLaps = lapsAtT + partial; // credite la progression dans le tour en cours, pas juste les tours complets
     var targetPaceMs = s.cfg.raceDurationH*3600000/s.cfg.targetLaps;
     var deltaMs = effectiveLaps*targetPaceMs - elapsed;
     var projLaps=null, projKm=null;
