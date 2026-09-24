@@ -597,10 +597,18 @@ h1{margin:2px 0 0;font-family:'Big Shoulders',sans-serif;font-weight:800;font-si
       return sessionsRef.where('trackOf','==',doc.id).get().then(function(chunks){
         if(token!==finalToken) return;
         var d=doc.data(), cfg=d.cfg||{targetLaps:29,targetKm:100,loopKm:3.454,loopGainM:127,raceDurationH:24};
-        var end = d.endedAt || (d.updatedAt && d.updatedAt.toMillis ? d.updatedAt.toMillis() : Date.now());
-        end = Math.min(end, d.startedAt + cfg.raceDurationH*3600000);
         var pts=(d.track||[]).slice();
         chunks.forEach(function(c){ Array.prototype.push.apply(pts, c.data().pts||[]); });
+        // fin de course : l'heure enregistree en tapant "Terminer" ; pour une sortie plus ancienne qui ne
+        // l'a pas, le dernier signe d'activite (dernier tour ou derniere position), jamais la date de
+        // derniere modification du document (elle bouge si la sortie est reprise ou retouchee)
+        var end = d.endedAt;
+        if(!end){
+          end = d.startedAt;
+          (d.laps||[]).forEach(function(l){ if(l.t>end) end=l.t; });
+          pts.forEach(function(p){ if(p.t>end) end=p.t; });
+        }
+        end = Math.min(end, d.startedAt + cfg.raceDurationH*3600000);
         pts = pts.filter(function(p){ return p.t>=d.startedAt && p.t<=end; }).sort(function(a,b){ return a.t-b.t; });
         var laps = normLaps((d.laps||[]).filter(function(l){ return l.t>=d.startedAt && l.t<=end; }));
         // progression recalee tour par tour, pour le rejeu

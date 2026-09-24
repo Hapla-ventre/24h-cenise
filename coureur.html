@@ -802,7 +802,7 @@ a.suivi-link{color:var(--accent);font-weight:600;}
       if(!doc.exists) return;
       var d = doc.data();
       deactivateOthersAnd(doc.ref, function(batch){
-        batch.update(doc.ref, {active:true, updatedAt: firebase.firestore.FieldValue.serverTimestamp()});
+        batch.update(doc.ref, {active:true, endedAt: firebase.firestore.FieldValue.delete(), updatedAt: firebase.firestore.FieldValue.serverTimestamp()});
       }).then(function(){
         applyLoadedSession(id, d);
       });
