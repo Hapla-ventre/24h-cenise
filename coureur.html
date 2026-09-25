@@ -513,6 +513,17 @@ a.suivi-link{color:var(--accent);font-weight:600;}
     }});
     new RecenterCtl().addTo(raceMap);
     raceMap.fitBounds(L.latLngBounds(TRACK), {padding:[16,16]});
+    // La carte peut etre creee alors que sa zone est cachee (0 px) : Leaflet ne charge alors qu'un
+    // coin et se cadre mal. On la recalcule a chaque changement de taille, et on la recadre sur la
+    // boucle la premiere fois qu'elle devient visible.
+    var mapEl=document.getElementById('race-map'), mapFitted=mapEl.offsetWidth>0;
+    function refreshMapSize(){
+      if(!mapEl.offsetWidth) return;
+      raceMap.invalidateSize();
+      if(!mapFitted){ mapFitted=true; raceMap.fitBounds(L.latLngBounds(TRACK), {padding:[16,16]}); }
+    }
+    if(window.ResizeObserver) new ResizeObserver(refreshMapSize).observe(mapEl);
+    else window.addEventListener('resize', refreshMapSize);
     return raceMap;
   }
   // Trait et point sont tous deux calcules depuis la meme progression le long du trace : le trait

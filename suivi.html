@@ -350,6 +350,17 @@ h1{margin:2px 0 0;font-family:'Big Shoulders',sans-serif;font-weight:800;font-si
     }});
     new RecenterCtl().addTo(raceMap);
     raceMap.fitBounds(L.latLngBounds(TRACK), {padding:[16,16]});
+    // La carte peut etre creee alors que sa zone est cachee (0 px) : Leaflet ne charge alors qu'un
+    // coin et se cadre mal. On la recalcule a chaque changement de taille, et on la recadre sur la
+    // boucle la premiere fois qu'elle devient visible.
+    var mapEl=document.getElementById('race-map'), mapFitted=mapEl.offsetWidth>0;
+    function refreshMapSize(){
+      if(!mapEl.offsetWidth) return;
+      raceMap.invalidateSize();
+      if(!mapFitted){ mapFitted=true; raceMap.fitBounds(L.latLngBounds(TRACK), {padding:[16,16]}); }
+    }
+    if(window.ResizeObserver) new ResizeObserver(refreshMapSize).observe(mapEl);
+    else window.addEventListener('resize', refreshMapSize);
     setTimeout(function(){ raceMap.invalidateSize(); }, 50);
     return raceMap;
   }
