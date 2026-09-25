@@ -85,6 +85,8 @@ body{background:var(--bg);color:var(--ink);font-family:'IBM Plex Sans',system-ui
 .sync-row{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--ink-dim);}
 .sync-dot{width:8px;height:8px;border-radius:50%;background:var(--ink-dim);flex-shrink:0;}
 .gps-age.is-stale{color:var(--danger);font-weight:600;}
+.termux-down{background:var(--danger);color:#fff;border-radius:14px;padding:12px 14px;font-size:14px;line-height:1.4;display:flex;flex-direction:column;gap:8px;}
+.termux-down .termux-open{align-self:flex-start;background:#fff;color:var(--danger);font-weight:700;text-decoration:none;padding:8px 14px;border-radius:10px;}
 .sync-dot.is-ok{background:var(--good);}
 .sync-dot.is-pending{background:var(--danger);}
 .action-buttons{display:flex;gap:8px;}
@@ -107,6 +109,10 @@ a.suivi-link{color:var(--accent);font-weight:600;}
   </header>
 
   <main class="main">
+    <div class="termux-down" id="termux-down" hidden>
+      <b>Termux ne tourne pas.</b> Ouvre-le : le script se lance tout seul, puis reviens ici (rien n'est perdu).
+      <a class="termux-open" href="intent:#Intent;package=com.termux;end">Ouvrir Termux</a>
+    </div>
     <p class="fine-print" id="online-only-notice" hidden>Tu es sur la version en ligne : elle a besoin du réseau. Pour courir sans réseau, lance Termux puis ouvre <b>http://localhost:8765/coureur.html</b> (voir « Tours automatiques en fond » en bas).</p>
     <section class="replay-block" id="session-manager">
       <h3>Sorties</h3>
@@ -212,7 +218,7 @@ a.suivi-link{color:var(--accent);font-weight:600;}
 
     <section class="replay-block" id="setup-card">
       <h3>Tours automatiques en fond (Termux)</h3>
-      <p class="fine-print">Installe Termux + Termux:API (F-Droid). Dans les réglages Android : Termux:API → Autorisations → Position → <b>Toujours autoriser</b>, et Termux + Termux:API → Batterie → <b>Sans restriction</b>. Avec du réseau, ouvre Termux et colle cette commande en une fois : elle installe l'appli complète sur le téléphone et la lance. Ensuite, ouvre <b>http://localhost:8765/coureur.html</b> dans Chrome (Menu ⋮ → Ajouter à l'écran d'accueil) : c'est ta version coureur, <b>elle marche sans réseau</b> tant que Termux tourne. Termux enregistre ta position en continu (~5 s), compte le tour dès que tu passes à moins de 30 m du départ, et envoie tout au suivi dès qu'il y a du réseau — sans réseau, tout est gardé sur le téléphone et part plus tard. Pour relancer Termux plus tard (même sans réseau) : <code>python3 ~/24h-cenise-main/reveil-tour.py</code>. À recoller après chaque mise à jour de l'appli.</p>
+      <p class="fine-print">Installe Termux + Termux:API (F-Droid). Dans les réglages Android : Termux:API → Autorisations → Position → <b>Toujours autoriser</b>, et Termux + Termux:API → Batterie → <b>Sans restriction</b>. Avec du réseau, ouvre Termux et colle cette commande en une fois : elle installe l'appli complète sur le téléphone et la lance. Ensuite, ouvre <b>http://localhost:8765/coureur.html</b> dans Chrome (Menu ⋮ → Ajouter à l'écran d'accueil) : c'est ta version coureur, <b>elle marche sans réseau</b>. Après l'installation, <b>ouvrir Termux suffit à tout relancer</b> (même sans réseau) ; si tu ouvres le raccourci alors que Termux ne tourne pas, la page s'affiche quand même avec un bouton « Ouvrir Termux ». Termux enregistre ta position en continu (~5 s) seulement pendant une sortie, compte le tour dès que tu passes à moins de 30 m du départ, et envoie tout au suivi dès qu'il y a du réseau — sans réseau, tout est gardé sur le téléphone et part plus tard. À recoller après chaque mise à jour de l'appli.</p>
       <div class="replay-controls">
         <button type="button" id="btn-copy-setup">Copier la commande d'installation</button>
       </div>
@@ -427,6 +433,14 @@ a.suivi-link{color:var(--accent);font-weight:600;}
   // tout marche sans reseau. Le suivi recoit tout des que le reseau revient.
   var LOCAL_API = /^(localhost|127\.0\.0\.1)$/.test(location.hostname);
   document.getElementById('online-only-notice').hidden = LOCAL_API;
+  // appli gardee sur le telephone (sw.js) : elle s'ouvre meme si Termux est arrete
+  if(LOCAL_API && 'serviceWorker' in navigator){ try{ navigator.serviceWorker.register('/sw.js').catch(function(){}); }catch(e){} }
+  var pageOpenedAt = Date.now();
+  setInterval(function(){
+    if(!LOCAL_API) return;
+    var down = Date.now()-pageOpenedAt>5000 && (!termuxLocal || Date.now()-termuxLocal.t>8000);
+    document.getElementById('termux-down').hidden = !down;
+  }, 1000);
   var localPts={}, localPtsFor=null, localSince=0, termuxLocal=null;
   function pollLocal(){
     if(!LOCAL_API) return; // meme page cachee : c'est elle qui dit a Termux quelle sortie suivre
@@ -987,6 +1001,7 @@ a.suivi-link{color:var(--accent);font-weight:600;}
   var TERMUX_SETUP_CMD = [
     'pkg update -y && pkg install -y python termux-api curl tar',
     'cd ~ && rm -rf 24h-cenise-main && curl -fsSL https://github.com/Hapla-ventre/24h-cenise/archive/refs/heads/main.tar.gz | tar xz',
+    'grep -q reveil-tour ~/.bashrc 2>/dev/null || echo "python3 ~/24h-cenise-main/reveil-tour.py" >> ~/.bashrc',
     'python3 ~/24h-cenise-main/reveil-tour.py'
   ].join('\n');
 

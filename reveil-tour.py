@@ -12,6 +12,7 @@ import json
 import math
 import os
 import queue
+import socket
 import subprocess
 import threading
 import time
@@ -346,6 +347,9 @@ def run_one_stream(out_q):
 
 def location_streams(out_q):
     while True:
+        if not live.session_id:
+            time.sleep(3)              # pas de sortie active : GPS eteint
+            continue
         t0 = time.time()
         run_one_stream(out_q)          # bloque ~30 s (45 s au plus), puis on relance
         if time.time() - t0 < 3:
@@ -405,13 +409,31 @@ def net_loop():
 
 # ---- boucle principale : GPS + tours ----
 
-def main(stream=location_streams):
-    os.makedirs(DATA_DIR, exist_ok=True)
-    live.restore()
+def already_running():
+    s = socket.socket()
+    s.settimeout(1)
     try:
-        subprocess.run(["termux-wake-lock"], timeout=10)
+        return s.connect_ex(("127.0.0.1", PORT)) == 0
+    finally:
+        s.close()
+
+
+def wake_lock(on):
+    # garde le telephone eveille pendant une sortie seulement
+    try:
+        subprocess.run(["termux-wake-lock" if on else "termux-wake-unlock"], timeout=10)
     except Exception:
         pass
+
+
+def main(stream=location_streams):
+    # lance automatiquement a chaque ouverture de Termux : un seul exemplaire a la fois
+    if already_running():
+        print("reveil-tour tourne deja (dans un autre onglet Termux). Appli : http://localhost:%d/coureur.html" % PORT)
+        return
+    os.makedirs(DATA_DIR, exist_ok=True)
+    live.restore()
+    wake_lock(bool(live.session_id))
     threading.Thread(target=serve, daemon=True).start()
     threading.Thread(target=net_loop, daemon=True).start()
     q = queue.Queue()
@@ -450,6 +472,7 @@ def main(stream=location_streams):
                 live.started = started
                 live.save()
         if switched:
+            wake_lock(bool(wanted))
             armed, min_dist, min_dist_t, last_good = False, None, None, None
             last_lap_t = max(live.laps) / 1000.0 if live.laps else 0.0
             log("sortie active :", wanted or "aucune")
