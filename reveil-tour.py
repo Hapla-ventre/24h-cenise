@@ -45,14 +45,10 @@ UPLOAD_EVERY_S = 10
 CHUNK_MS = 900000     # un document de trace par tranche de 15 min (moins de lectures pour chaque suiveur)
 SESSION_CHECK_S = 15
 PAGE_TRUST_S = 600    # la page coureur ouverte fait foi sur la sortie en cours pendant 10 min
-STREAM_MAX_S = 45     # au-dela, un appel GPS est considere comme bloque et arrete
-NEXT_FIX_S = 6        # Android bride Termux:API a ~1 position par demande : sans nouvelle position
-                      # fraiche 6 s apres la precedente, on relance une demande pour en obtenir une
-FIRST_FIX_S = 40      # temps laisse a une demande pour sa premiere position fraiche : plus que les 30 s
-                      # ou Termux:API l'arrete lui-meme, pour ne jamais couper une position qui arrive
-                      # tard (a l'interieur, sous les arbres : ~25-30 s)
-FRESH_MS = 3000       # une demande commence souvent par la derniere position en memoire (vieille de
-                      # plusieurs dizaines de s) : seule une position mesuree il y a < 3 s compte
+STREAM_MAX_S = 45     # filet de securite seulement : Termux:API termine lui-meme une demande en 30 s.
+                      # On ne coupe JAMAIS une demande avant : des demandes coupees continuent de
+                      # tourner 30 s dans Termux:API, s'accumulent et finissent par le bloquer.
+FRESH_MS = 3000       # une position mesuree il y a moins de 3 s (sinon : la derniere en memoire)
 
 
 def haversine(lat1, lon1, lat2, lon2):
@@ -320,46 +316,26 @@ def send_lap(session_id, t_ms):
 
 
 # ---- flux GPS ----
-# Chaque "termux-location -r updates" vit 30 s, puis on en relance un aussitot. Une seule demande a
-# la fois : des demandes qui se chevauchent ont deja bloque la localisation de Termux:API (plus
-# aucune position, meme en "once", jusqu'a un "Forcer l'arret" de Termux:API).
+# Deux facons de demander la position a Termux:API, une seule demande a la fois, jamais coupee :
+#  - "updates" : flux continu pendant 30 s (une position toutes les 5 s si Android le permet) ;
+#  - "once"    : attend UNE position fraiche, la renvoie et se termine aussitot.
+# En arriere-plan, Android ne donne souvent qu'une position fraiche par demande : le flux continu
+# ne rapporte alors qu'un point toutes les ~30 s. Le script l'apprend et passe en "once" enchaines
+# (un point des qu'il est calcule, ~5-10 s dehors) ; une demande sur 10 reessaie le flux continu.
+stream_mode = {"once": False, "count": 0}
 
-# Mode appris : si une demande ne donne qu'UNE position fraiche (Android bride l'arriere-plan), on
-# relance des qu'on l'a, sans attendre une deuxieme qui ne viendra pas. Une demande sur 10 reste en
-# mode normal pour voir si le flux continu refonctionne.
-stream_mode = {"one_shot": False, "count": 0}
 
-
-def run_one_stream(out_q):
-    stream_mode["count"] += 1
-    one_shot = stream_mode["one_shot"] and stream_mode["count"] % 10 != 0
+def run_one_request(out_q, kind):
+    """Lance une demande et renvoie le nombre de positions fraiches recues."""
     try:
-        p = subprocess.Popen(["termux-location", "-p", "gps", "-r", "updates"],
+        p = subprocess.Popen(["termux-location", "-p", "gps", "-r", kind],
                              stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
     except Exception:
-        return
-    # Arret de la demande : si plus aucune position n'arrive NEXT_FIX_S apres la precedente (Android
-    # ne donne souvent qu'une position par demande en arriere-plan), si la premiere tarde plus de
-    # FIRST_FIX_S, ou au bout de STREAM_MAX_S dans tous les cas (appel bloque). La suivante part aussitot.
-    started = time.time()
-    last_fix = [None]
-    fresh = [0]
-    done = threading.Event()
-
-    def watchdog():
-        while not done.wait(0.5):
-            now = time.time()
-            if (now - started > STREAM_MAX_S
-                    or (one_shot and fresh[0] >= 1)
-                    or (last_fix[0] is None and now - started > FIRST_FIX_S)
-                    or (last_fix[0] is not None and now - last_fix[0] > NEXT_FIX_S)):
-                try:
-                    p.kill()
-                except Exception:
-                    pass
-                return
-    threading.Thread(target=watchdog, daemon=True).start()
-    buf, depth = "", 0
+        return 0
+    killer = threading.Timer(STREAM_MAX_S, p.kill)  # demande vraiment bloquee seulement
+    killer.daemon = True
+    killer.start()
+    fresh, buf, depth = 0, "", 0
     for ch in iter(lambda: p.stdout.read(1), ""):
         if ch == "{":
             depth += 1
@@ -372,17 +348,13 @@ def run_one_stream(out_q):
                     loc = json.loads(buf)
                     out_q.put((time.time(), loc))
                     if "latitude" in loc and loc.get("elapsedMs", 0) < FRESH_MS:
-                        last_fix[0] = time.time()
-                        fresh[0] += 1
+                        fresh += 1
                 except ValueError:
                     pass
                 buf = ""
     p.wait()
-    done.set()
-    if fresh[0] >= 2:
-        stream_mode["one_shot"] = False   # flux continu : on le laisse couler
-    elif fresh[0] == 1 and not one_shot:
-        stream_mode["one_shot"] = True    # une seule position par demande : on relancera aussitot
+    killer.cancel()
+    return fresh
 
 
 def location_streams(out_q):
@@ -390,8 +362,14 @@ def location_streams(out_q):
         if not live.session_id:
             time.sleep(3)              # pas de sortie active : GPS eteint
             continue
+        stream_mode["count"] += 1
+        retry_updates = stream_mode["count"] % 10 == 0
+        kind = "once" if stream_mode["once"] and not retry_updates else "updates"
         t0 = time.time()
-        run_one_stream(out_q)          # jusqu'a ce que les positions s'arretent, puis on relance
+        fresh = run_one_request(out_q, kind)
+        if kind == "updates":
+            # flux continu qui ne donne qu'une position fraiche (ou aucune) : Android bride
+            stream_mode["once"] = fresh <= 1
         if time.time() - t0 < 3:
             time.sleep(3)              # erreur immediate (Termux:API absent...) : pas de boucle folle
 
