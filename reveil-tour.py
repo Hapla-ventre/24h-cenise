@@ -316,13 +316,10 @@ def send_lap(session_id, t_ms):
 
 
 # ---- flux GPS ----
-# Deux facons de demander la position a Termux:API, une seule demande a la fois, jamais coupee :
-#  - "updates" : flux continu pendant 30 s (une position toutes les 5 s si Android le permet) ;
-#  - "once"    : attend UNE position fraiche, la renvoie et se termine aussitot.
-# En arriere-plan, Android ne donne souvent qu'une position fraiche par demande : le flux continu
-# ne rapporte alors qu'un point toutes les ~30 s. Le script l'apprend et passe en "once" enchaines
-# (un point des qu'il est calcule, ~5-10 s dehors) ; une demande sur 10 reessaie le flux continu.
-stream_mode = {"once": False, "count": 0}
+# Demandes "once" enchainees, une seule a la fois et jamais coupee : chacune attend une position
+# fraiche, la renvoie et se termine ; la suivante part aussitot. Mesure sur le telephone : une
+# position toutes les 4-6 s (le flux continu "updates" n'en donnait qu'une toutes les ~30 s en
+# arriere-plan, Android le bride). Couper une demande en cours bloque Termux:API : jamais.
 
 
 def run_one_request(out_q, kind):
@@ -362,15 +359,9 @@ def location_streams(out_q):
         if not live.session_id:
             time.sleep(3)              # pas de sortie active : GPS eteint
             continue
-        stream_mode["count"] += 1
-        retry_updates = stream_mode["count"] % 10 == 0
-        kind = "once" if stream_mode["once"] and not retry_updates else "updates"
         t0 = time.time()
-        fresh = run_one_request(out_q, kind)
-        if kind == "updates":
-            # flux continu qui ne donne qu'une position fraiche (ou aucune) : Android bride
-            stream_mode["once"] = fresh <= 1
-        if time.time() - t0 < 3:
+        run_one_request(out_q, "once")
+        if time.time() - t0 < 1:
             time.sleep(3)              # erreur immediate (Termux:API absent...) : pas de boucle folle
 
 
