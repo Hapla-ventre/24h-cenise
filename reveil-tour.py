@@ -48,7 +48,9 @@ PAGE_TRUST_S = 600    # la page coureur ouverte fait foi sur la sortie en cours 
 STREAM_MAX_S = 45     # au-dela, un appel GPS est considere comme bloque et arrete
 NEXT_FIX_S = 6        # Android bride Termux:API a ~1 position par demande : sans nouvelle position
                       # fraiche 6 s apres la precedente, on relance une demande pour en obtenir une
-FIRST_FIX_S = 20      # temps laisse a une demande pour donner sa premiere position fraiche
+FIRST_FIX_S = 40      # temps laisse a une demande pour sa premiere position fraiche : plus que les 30 s
+                      # ou Termux:API l'arrete lui-meme, pour ne jamais couper une position qui arrive
+                      # tard (a l'interieur, sous les arbres : ~25-30 s)
 FRESH_MS = 3000       # une demande commence souvent par la derniere position en memoire (vieille de
                       # plusieurs dizaines de s) : seule une position mesuree il y a < 3 s compte
 
