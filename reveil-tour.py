@@ -47,8 +47,10 @@ SESSION_CHECK_S = 15
 PAGE_TRUST_S = 600    # la page coureur ouverte fait foi sur la sortie en cours pendant 10 min
 STREAM_MAX_S = 45     # au-dela, un appel GPS est considere comme bloque et arrete
 NEXT_FIX_S = 6        # Android bride Termux:API a ~1 position par demande : sans nouvelle position
-                      # 6 s apres la precedente, on relance une demande pour en obtenir une neuve
-FIRST_FIX_S = 25      # temps laisse a une demande pour donner sa premiere position
+                      # fraiche 6 s apres la precedente, on relance une demande pour en obtenir une
+FIRST_FIX_S = 20      # temps laisse a une demande pour donner sa premiere position fraiche
+FRESH_MS = 3000       # une demande commence souvent par la derniere position en memoire (vieille de
+                      # plusieurs dizaines de s) : seule une position mesuree il y a < 3 s compte
 
 
 def haversine(lat1, lon1, lat2, lon2):
@@ -320,7 +322,15 @@ def send_lap(session_id, t_ms):
 # la fois : des demandes qui se chevauchent ont deja bloque la localisation de Termux:API (plus
 # aucune position, meme en "once", jusqu'a un "Forcer l'arret" de Termux:API).
 
+# Mode appris : si une demande ne donne qu'UNE position fraiche (Android bride l'arriere-plan), on
+# relance des qu'on l'a, sans attendre une deuxieme qui ne viendra pas. Une demande sur 10 reste en
+# mode normal pour voir si le flux continu refonctionne.
+stream_mode = {"one_shot": False, "count": 0}
+
+
 def run_one_stream(out_q):
+    stream_mode["count"] += 1
+    one_shot = stream_mode["one_shot"] and stream_mode["count"] % 10 != 0
     try:
         p = subprocess.Popen(["termux-location", "-p", "gps", "-r", "updates"],
                              stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
@@ -331,12 +341,14 @@ def run_one_stream(out_q):
     # FIRST_FIX_S, ou au bout de STREAM_MAX_S dans tous les cas (appel bloque). La suivante part aussitot.
     started = time.time()
     last_fix = [None]
+    fresh = [0]
     done = threading.Event()
 
     def watchdog():
         while not done.wait(0.5):
             now = time.time()
             if (now - started > STREAM_MAX_S
+                    or (one_shot and fresh[0] >= 1)
                     or (last_fix[0] is None and now - started > FIRST_FIX_S)
                     or (last_fix[0] is not None and now - last_fix[0] > NEXT_FIX_S)):
                 try:
@@ -355,13 +367,20 @@ def run_one_stream(out_q):
             depth -= 1
             if depth == 0:
                 try:
-                    out_q.put((time.time(), json.loads(buf)))
-                    last_fix[0] = time.time()
+                    loc = json.loads(buf)
+                    out_q.put((time.time(), loc))
+                    if "latitude" in loc and loc.get("elapsedMs", 0) < FRESH_MS:
+                        last_fix[0] = time.time()
+                        fresh[0] += 1
                 except ValueError:
                     pass
                 buf = ""
     p.wait()
     done.set()
+    if fresh[0] >= 2:
+        stream_mode["one_shot"] = False   # flux continu : on le laisse couler
+    elif fresh[0] == 1 and not one_shot:
+        stream_mode["one_shot"] = True    # une seule position par demande : on relancera aussitot
 
 
 def location_streams(out_q):
