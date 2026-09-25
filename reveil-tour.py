@@ -46,6 +46,9 @@ CHUNK_MS = 900000     # un document de trace par tranche de 15 min (moins de lec
 SESSION_CHECK_S = 15
 PAGE_TRUST_S = 600    # la page coureur ouverte fait foi sur la sortie en cours pendant 10 min
 STREAM_MAX_S = 45     # au-dela, un appel GPS est considere comme bloque et arrete
+NEXT_FIX_S = 6        # Android bride Termux:API a ~1 position par demande : sans nouvelle position
+                      # 6 s apres la precedente, on relance une demande pour en obtenir une neuve
+FIRST_FIX_S = 25      # temps laisse a une demande pour donner sa premiere position
 
 
 def haversine(lat1, lon1, lat2, lon2):
@@ -323,10 +326,25 @@ def run_one_stream(out_q):
                              stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
     except Exception:
         return
-    # filet de securite : un appel bloque est arrete, pour ne pas en accumuler
-    killer = threading.Timer(STREAM_MAX_S, p.kill)
-    killer.daemon = True
-    killer.start()
+    # Arret de la demande : si plus aucune position n'arrive NEXT_FIX_S apres la precedente (Android
+    # ne donne souvent qu'une position par demande en arriere-plan), si la premiere tarde plus de
+    # FIRST_FIX_S, ou au bout de STREAM_MAX_S dans tous les cas (appel bloque). La suivante part aussitot.
+    started = time.time()
+    last_fix = [None]
+    done = threading.Event()
+
+    def watchdog():
+        while not done.wait(0.5):
+            now = time.time()
+            if (now - started > STREAM_MAX_S
+                    or (last_fix[0] is None and now - started > FIRST_FIX_S)
+                    or (last_fix[0] is not None and now - last_fix[0] > NEXT_FIX_S)):
+                try:
+                    p.kill()
+                except Exception:
+                    pass
+                return
+    threading.Thread(target=watchdog, daemon=True).start()
     buf, depth = "", 0
     for ch in iter(lambda: p.stdout.read(1), ""):
         if ch == "{":
@@ -338,11 +356,12 @@ def run_one_stream(out_q):
             if depth == 0:
                 try:
                     out_q.put((time.time(), json.loads(buf)))
+                    last_fix[0] = time.time()
                 except ValueError:
                     pass
                 buf = ""
     p.wait()
-    killer.cancel()
+    done.set()
 
 
 def location_streams(out_q):
@@ -351,7 +370,7 @@ def location_streams(out_q):
             time.sleep(3)              # pas de sortie active : GPS eteint
             continue
         t0 = time.time()
-        run_one_stream(out_q)          # bloque ~30 s (45 s au plus), puis on relance
+        run_one_stream(out_q)          # jusqu'a ce que les positions s'arretent, puis on relance
         if time.time() - t0 < 3:
             time.sleep(3)              # erreur immediate (Termux:API absent...) : pas de boucle folle
 
